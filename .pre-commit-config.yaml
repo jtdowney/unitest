@@ -1,0 +1,43 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: gleam-check
+        name: gleam check
+        entry: gleam check
+        language: system
+        files: ^src/.*\.gleam$
+        pass_filenames: false
+      - id: gleam-format
+        name: gleam format --check
+        entry: gleam format --check src test
+        language: system
+        files: ^src/.*\.gleam$
+        pass_filenames: false
+      - id: erlfmt
+        name: erlfmt
+        entry: rebar3 fmt -c
+        language: system
+        files: ^src/.*\.erl$
+        pass_filenames: false
+      - id: prettier
+        name: prettier --check
+        entry: bun run format
+        language: system
+        files: ^src/.*\.*$
+        pass_filenames: false
+      - id: eslint
+        name: eslint
+        entry: bun run lint
+        language: system
+        files: ^src/.*\.mjs$
+        pass_filenames: false

@@ -1,0 +1,211 @@
+//// Unitest is a Gleam test runner with random ordering, tagging, and CLI filtering.
+////
+//// Drop-in replacement for gleeunit with additional features:
+//// - Random test ordering with reproducible seeds
+//// - Test tagging for selective execution
+//// - CLI filtering by module, test, or tag
+
+import argv
+import envoy
+import gleam/io
+import gleam/list
+import gleam/option.{type Option, None}
+import gleam/order
+import gleam/string
+import unitest/internal/cli
+import unitest/internal/discover.{type Test}
+import unitest/internal/runner.{type Report}
+
+/// Configuration options for the test runner.
+///
+/// ## Fields
+///
+/// - `seed`: Optional seed for deterministic test ordering. When `None`,
+///   a random seed is generated automatically.
+/// - `ignored_tags`: Tests with any of these tags will be skipped and
+///   reported as `S` in the output.
+///
+/// ## Example
+///
+/// ```gleam
+/// unitest.run(Options(
+///   seed: Some(12345),
+///   ignored_tags: ["slow", "integration"],
+/// ))
+/// ```
+pub type Options {
+  Options(seed: Option(Int), ignored_tags: List(String))
+}
+
+/// Returns default options with no seed and no ignored tags.
+///
+/// Equivalent to `Options(seed: None, ignored_tags: [])`.
+pub fn default_options() -> Options {
+  Options(seed: None, ignored_tags: [])
+}
+
+/// Run tests with the given options.
+///
+/// Discovers all test files in `test/`, applies CLI arguments for filtering,
+/// shuffles tests using the selected seed, executes them, and prints results.
+///
+/// ## CLI Arguments
+///
+/// Pass arguments after `--` when running `gleam test`:
+///
+/// - `--seed <int>`: Use specific seed for reproducible ordering
+/// - `--module <name>`: Run only tests in matching module
+/// - `--test <module.fn>`: Run a single test function
+/// - `--tag <name>`: Run only tests with this tag
+///
+/// ## Example
+///
+/// ```gleam
+/// pub fn main() {
+///   unitest.run(Options(seed: None, ignored_tags: ["slow"]))
+/// }
+/// ```
+pub fn run(options: Options) -> Nil {
+  let args = argv.load().arguments
+  run_with_args(args, options)
+}
+
+/// Entry point using default options.
+///
+/// This is a drop-in replacement for `gleeunit.main()`. Call this from your
+/// test file's `main` function if you don't need custom options.
+///
+/// ## Example
+///
+/// ```gleam
+/// pub fn main() {
+///   unitest.main()
+/// }
+/// ```
+pub fn main() -> Nil {
+  run(default_options())
+}
+
+/// Mark a test with a single tag for filtering or skipping.
+///
+/// Use with Gleam's `use` syntax at the start of a test function.
+/// Tags must be string literals for static analysis.
+///
+/// ## Example
+///
+/// ```gleam
+/// pub fn database_integration_test() {
+///   use <- unitest.tag("integration")
+///   // test code here
+/// }
+/// ```
+///
+/// Then run: `gleam test -- --tag integration`
+pub fn tag(_tag: String, next: fn() -> a) -> a {
+  next()
+}
+
+/// Mark a test with multiple tags for filtering or skipping.
+///
+/// Use with Gleam's `use` syntax at the start of a test function.
+/// Tags must be string literals for static analysis.
+///
+/// ## Example
+///
+/// ```gleam
+/// pub fn slow_integration_test() {
+///   use <- unitest.tags(["slow", "integration"])
+///   // test code here
+/// }
+/// ```
+pub fn tags(_tags: List(String), next: fn() -> a) -> a {
+  next()
+}
+
+fn run_with_args(args: List(String), options: Options) -> Nil {
+  case cli.parse(args) {
+    Error(help) -> {
+      io.println(help)
+    }
+    Ok(cli_opts) -> {
+      // Determine if we should use colors
+      let use_color = should_use_color(cli_opts.no_color)
+
+      // Discover tests
+      let tests = discover.discover_from_fs("test")
+
+      // Select seed
+      let chosen_seed =
+        option.or(cli_opts.seed, options.seed) |> option.lazy_unwrap(auto_seed)
+
+      // Sort deterministically, then shuffle
+      let sorted =
+        list.sort(tests, fn(a, b) {
+          case string.compare(a.module, b.module) {
+            order.Eq -> string.compare(a.name, b.name)
+            other -> other
+          }
+        })
+      let shuffled = runner.shuffle(sorted, chosen_seed)
+
+      // Plan (filter and determine run/skip)
+      let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
+
+      // Execute and finish - on JS this is async and handles everything
+      execute_and_finish(plan, chosen_seed, use_color)
+    }
+  }
+}
+
+// On Erlang: execute tests, print summary, exit
+// On JS: calls async function that does everything (runtime handles Promise)
+@external(javascript, "./unitest_ffi.mjs", "execute_and_finish_js")
+fn execute_and_finish(
+  plan: List(runner.PlanItem),
+  seed: Int,
+  use_color: Bool,
+) -> Nil {
+  // Erlang implementation: build platform inline
+  let platform =
+    runner.Platform(
+      now_ms: fn() { now_ms_ffi() },
+      run_test: fn(t) { run_test_ffi(t) },
+      print: fn(s) { io.print(s) },
+    )
+  let report = runner.execute(plan, seed, platform, use_color)
+  let summary = runner.render_summary(report, use_color)
+  io.println(summary)
+  case exit_code(report) {
+    0 -> Nil
+    code -> halt(code)
+  }
+}
+
+@internal
+pub fn exit_code(report: Report) -> Int {
+  case report.failed {
+    0 -> 0
+    _ -> 1
+  }
+}
+
+fn should_use_color(cli_no_color: Bool) -> Bool {
+  case cli_no_color, envoy.get("NO_COLOR") {
+    True, _ -> False
+    _, Ok(_) -> False
+    _, Error(_) -> True
+  }
+}
+
+@external(erlang, "unitest_ffi_erl", "now_ms")
+fn now_ms_ffi() -> Int
+
+@external(erlang, "unitest_ffi_erl", "run_test")
+fn run_test_ffi(t: Test) -> Result(Nil, String)
+
+@external(erlang, "erlang", "halt")
+fn halt(code: Int) -> Nil
+
+@external(erlang, "unitest_ffi_erl", "auto_seed")
+@external(javascript, "./unitest_ffi.mjs", "autoSeed")
+fn auto_seed() -> Int
