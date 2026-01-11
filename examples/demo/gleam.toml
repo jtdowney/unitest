@@ -1,0 +1,9 @@
+name = "demo"
+version = "1.0.0"
+description = "Demo project showcasing unitest features"
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+
+[dev-dependencies]
+unitest = { path = "../.." }
