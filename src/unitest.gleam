@@ -24,6 +24,7 @@ import unitest/internal/runner.{type Report}
 ///   a random seed is generated automatically.
 /// - `ignored_tags`: Tests with any of these tags will be skipped and
 ///   reported as `S` in the output.
+/// - `test_directory`: Directory containing test files.
 ///
 /// ## Example
 ///
@@ -31,23 +32,23 @@ import unitest/internal/runner.{type Report}
 /// unitest.run(Options(
 ///   seed: Some(12345),
 ///   ignored_tags: ["slow", "integration"],
+///   test_directory: "test",
 /// ))
 /// ```
 pub type Options {
-  Options(seed: Option(Int), ignored_tags: List(String))
+  Options(seed: Option(Int), ignored_tags: List(String), test_directory: String)
 }
 
 /// Returns default options with no seed and no ignored tags.
-///
-/// Equivalent to `Options(seed: None, ignored_tags: [])`.
 pub fn default_options() -> Options {
-  Options(seed: None, ignored_tags: [])
+  Options(seed: None, ignored_tags: [], test_directory: "test")
 }
 
 /// Run tests with the given options.
 ///
-/// Discovers all test files in `test/`, applies CLI arguments for filtering,
-/// shuffles tests using the selected seed, executes them, and prints results.
+/// Discovers all test files in the test directory, applies CLI arguments for
+/// filtering, shuffles tests using the selected seed, executes them, and
+/// prints results.
 ///
 /// ## CLI Arguments
 ///
@@ -62,7 +63,7 @@ pub fn default_options() -> Options {
 ///
 /// ```gleam
 /// pub fn main() {
-///   unitest.run(Options(seed: None, ignored_tags: ["slow"]))
+///   unitest.run(Options(..unitest.default_options(), ignored_tags: ["slow"]))
 /// }
 /// ```
 pub fn run(options: Options) -> Nil {
@@ -132,7 +133,7 @@ fn run_with_args(args: List(String), options: Options) -> Nil {
       let use_color = should_use_color(cli_opts.no_color)
 
       // Discover tests
-      let tests = discover.discover_from_fs("test")
+      let tests = discover.discover_from_fs(options.test_directory)
 
       // Select seed
       let chosen_seed =
