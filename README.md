@@ -3,7 +3,7 @@
 [![Package Version](https://img.shields.io/hexpm/v/unitest)](https://hex.pm/packages/unitest)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/unitest/)
 
-A Gleam test runner with random ordering, tagging, and CLI filtering. Drop-in replacement for gleeunit.
+A Gleam test runner with random ordering, tagging, and CLI filtering. It is a drop-in replacement for gleeunit if you're already using asserts.
 
 ## Installation
 
@@ -41,7 +41,6 @@ Run with `gleam test`.
 - **Test tagging** for categorization and filtering
 - **CLI filtering** by module, test name, or tag
 - **Streaming output**: `.` pass, `F` fail, `S` skip
-- **gleeunit compatible** - existing tests work unchanged
 
 ## CLI Usage
 
