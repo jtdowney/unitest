@@ -6,8 +6,18 @@ import unitest/internal/discover.{Test}
 import unitest/internal/runner.{
   Failed, Passed, Platform, Report, Run, Skip, Skipped,
 }
+import unitest/internal/test_failure.{type TestFailure, Generic, TestFailure}
 
-// --- Execution tests (from run_test.gleam) ---
+fn test_failure(message: String) -> TestFailure {
+  TestFailure(
+    message: message,
+    file: "",
+    module: "",
+    function: "",
+    line: 0,
+    kind: Generic,
+  )
+}
 
 pub fn execute_passing_tests_counts_passed_test() {
   let t1 = Test(module: "foo", name: "a_test", tags: [])
@@ -35,7 +45,7 @@ pub fn execute_failing_test_counts_failure_test() {
   let platform =
     Platform(
       now_ms: fn() { 100 },
-      run_test: fn(_t) { Error("assertion failed") },
+      run_test: fn(_t) { Error(test_failure("assertion failed")) },
       print: fn(_s) { Nil },
     )
 
@@ -47,7 +57,7 @@ pub fn execute_failing_test_counts_failure_test() {
 
   let assert [failure] = report.failures
   assert failure.item == t1
-  assert failure.reason == "assertion failed"
+  assert failure.error.message == "assertion failed"
 }
 
 pub fn execute_skipped_test_counts_skipped_test() {
@@ -77,11 +87,8 @@ pub fn execute_captures_runtime_test() {
 
   let report = runner.execute(plan, 1, platform, False)
 
-  // With constant time, runtime = end - start = 100 - 100 = 0
   assert report.runtime_ms == 0
 }
-
-// --- Planning tests (from select_test.gleam) ---
 
 pub fn plan_all_with_no_filter_test() {
   let t1 = Test(module: "foo", name: "a_test", tags: [])
@@ -147,11 +154,8 @@ pub fn tag_filter_overrides_ignored_tags_test() {
 
   let result = runner.plan([t1], cli_opts, ["slow"])
 
-  // Even though "slow" is in ignored_tags, using --tag slow should run it
   assert result == [Run(t1)]
 }
-
-// --- Shuffle tests (from rng_test.gleam) ---
 
 pub fn shuffle_is_deterministic_test() {
   let items = [1, 2, 3, 4, 5]
@@ -185,14 +189,12 @@ pub fn single_item_returns_same_test() {
   assert result == [42]
 }
 
-// --- Formatting tests (from format_dot_test.gleam) ---
-
 pub fn passed_maps_to_dot_test() {
   assert runner.outcome_char(Passed, False) == "."
 }
 
 pub fn failed_maps_to_f_test() {
-  assert runner.outcome_char(Failed("error"), False) == "F"
+  assert runner.outcome_char(Failed(test_failure("error")), False) == "F"
 }
 
 pub fn skipped_maps_to_s_test() {
@@ -206,7 +208,7 @@ pub fn passed_maps_to_green_dot_when_colored_test() {
 }
 
 pub fn failed_maps_to_red_f_when_colored_test() {
-  let result = runner.outcome_char(Failed("error"), True)
+  let result = runner.outcome_char(Failed(test_failure("error")), True)
   assert string.contains(result, "F")
   assert string.contains(result, "\u{001b}[")
 }

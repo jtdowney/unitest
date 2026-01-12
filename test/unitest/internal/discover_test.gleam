@@ -2,8 +2,6 @@ import gleam/list
 import gleam/string
 import unitest/internal/discover
 
-// --- Path conversion tests ---
-
 pub fn path_to_module_simple_test() {
   let path = "test/foo/bar_test.gleam"
   assert discover.path_to_module(path) == "foo/bar_test"
@@ -18,8 +16,6 @@ pub fn path_to_module_top_level_test() {
   let path = "test/my_test.gleam"
   assert discover.path_to_module(path) == "my_test"
 }
-
-// --- Parse tests (from parse_test.gleam) ---
 
 fn make_source(body: String) -> String {
   string.concat(["pub", " fn ", body])

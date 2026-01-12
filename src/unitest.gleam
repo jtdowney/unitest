@@ -15,6 +15,7 @@ import gleam/string
 import unitest/internal/cli
 import unitest/internal/discover.{type Test}
 import unitest/internal/runner.{type Report}
+import unitest/internal/test_failure.{type TestFailure}
 
 /// Configuration options for the test runner.
 ///
@@ -129,17 +130,13 @@ fn run_with_args(args: List(String), options: Options) -> Nil {
       io.println(help)
     }
     Ok(cli_opts) -> {
-      // Determine if we should use colors
       let use_color = should_use_color(cli_opts.no_color)
 
-      // Discover tests
       let tests = discover.discover_from_fs(options.test_directory)
 
-      // Select seed
       let chosen_seed =
         option.or(cli_opts.seed, options.seed) |> option.lazy_unwrap(auto_seed)
 
-      // Sort deterministically, then shuffle
       let sorted =
         list.sort(tests, fn(a, b) {
           case string.compare(a.module, b.module) {
@@ -149,30 +146,21 @@ fn run_with_args(args: List(String), options: Options) -> Nil {
         })
       let shuffled = runner.shuffle(sorted, chosen_seed)
 
-      // Plan (filter and determine run/skip)
       let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
 
-      // Execute and finish - on JS this is async and handles everything
       execute_and_finish(plan, chosen_seed, use_color)
     }
   }
 }
 
-// On Erlang: execute tests, print summary, exit
-// On JS: calls async function that does everything (runtime handles Promise)
 @external(javascript, "./unitest_ffi.mjs", "execute_and_finish_js")
 fn execute_and_finish(
   plan: List(runner.PlanItem),
   seed: Int,
   use_color: Bool,
 ) -> Nil {
-  // Erlang implementation: build platform inline
   let platform =
-    runner.Platform(
-      now_ms: fn() { now_ms_ffi() },
-      run_test: fn(t) { run_test_ffi(t) },
-      print: fn(s) { io.print(s) },
-    )
+    runner.Platform(now_ms: now_ms_ffi, run_test: run_test_ffi, print: io.print)
   let report = runner.execute(plan, seed, platform, use_color)
   let summary = runner.render_summary(report, use_color)
   io.println(summary)
@@ -202,7 +190,7 @@ fn should_use_color(cli_no_color: Bool) -> Bool {
 fn now_ms_ffi() -> Int
 
 @external(erlang, "unitest_ffi_erl", "run_test")
-fn run_test_ffi(t: Test) -> Result(Nil, String)
+fn run_test_ffi(t: Test) -> Result(Nil, TestFailure)
 
 @external(erlang, "erlang", "halt")
 fn halt(code: Int) -> Nil
