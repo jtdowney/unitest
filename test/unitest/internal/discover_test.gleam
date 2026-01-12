@@ -4,17 +4,27 @@ import unitest/internal/discover
 
 pub fn path_to_module_simple_test() {
   let path = "test/foo/bar_test.gleam"
-  assert discover.path_to_module(path) == "foo/bar_test"
+  assert discover.path_to_module(path, "test") == "foo/bar_test"
 }
 
 pub fn path_to_module_nested_test() {
   let path = "test/a/b/c_test.gleam"
-  assert discover.path_to_module(path) == "a/b/c_test"
+  assert discover.path_to_module(path, "test") == "a/b/c_test"
 }
 
 pub fn path_to_module_top_level_test() {
   let path = "test/my_test.gleam"
-  assert discover.path_to_module(path) == "my_test"
+  assert discover.path_to_module(path, "test") == "my_test"
+}
+
+pub fn path_to_module_custom_dir_test() {
+  let path = "custom_tests/foo/bar_test.gleam"
+  assert discover.path_to_module(path, "custom_tests") == "foo/bar_test"
+}
+
+pub fn path_to_module_nested_custom_dir_test() {
+  let path = "specs/unit/model_test.gleam"
+  assert discover.path_to_module(path, "specs/unit") == "model_test"
 }
 
 fn make_source(body: String) -> String {

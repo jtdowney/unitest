@@ -1,4 +1,5 @@
 import gleam/option.{None, Some}
+import gleam/string
 import unitest/internal/cli
 
 pub fn parse_empty_args_test() {
@@ -78,4 +79,20 @@ pub fn parse_no_color_flag_test() {
   let result = cli.parse(["--no-color"])
   assert result
     == Ok(cli.CliOptions(seed: None, filter: cli.All, no_color: True))
+}
+
+pub fn parse_invalid_test_filter_missing_dot_test() {
+  let result = cli.parse(["--test", "foo_test"])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Invalid --test format")
+    Ok(_) -> False
+  }
+}
+
+pub fn parse_invalid_test_filter_no_function_test() {
+  let result = cli.parse(["--test", "some/module"])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Invalid --test format")
+    Ok(_) -> False
+  }
 }

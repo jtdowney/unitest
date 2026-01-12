@@ -3,6 +3,7 @@ import clip/flag
 import clip/help
 import clip/opt
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 
 pub type Filter {
@@ -29,8 +30,7 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
         Ok(s) -> Some(s)
         Error(Nil) -> None
       }
-      let filter = resolve_filter(test_result, module_result, tag_result)
-      CliOptions(seed: seed, filter: filter, no_color: no_color)
+      #(seed, test_result, module_result, tag_result, no_color)
     })
     |> clip.opt(
       opt.new("seed")
@@ -55,27 +55,40 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
     )
     |> clip.flag(flag.new("no-color") |> flag.help("Disable colored output"))
 
-  command
-  |> clip.help(help.simple("unitest", "Simple unit testing framework"))
-  |> clip.run(args)
+  use #(seed, test_result, module_result, tag_result, no_color) <- result.try(
+    command
+    |> clip.help(help.simple("unitest", "Simple unit testing framework"))
+    |> clip.run(args),
+  )
+  use filter <- result.try(resolve_filter(
+    test_result,
+    module_result,
+    tag_result,
+  ))
+  Ok(CliOptions(seed: seed, filter: filter, no_color: no_color))
 }
 
 fn resolve_filter(
   test_result: Result(String, Nil),
   module_result: Result(String, Nil),
   tag_result: Result(String, Nil),
-) -> Filter {
+) -> Result(Filter, String) {
   case test_result, module_result, tag_result {
     Ok(test_str), _, _ -> parse_test_filter(test_str)
-    _, Ok(module), _ -> OnlyModule(module)
-    _, _, Ok(tag) -> OnlyTag(tag)
-    _, _, _ -> All
+    _, Ok(module), _ -> Ok(OnlyModule(module))
+    _, _, Ok(tag) -> Ok(OnlyTag(tag))
+    _, _, _ -> Ok(All)
   }
 }
 
-fn parse_test_filter(test_str: String) -> Filter {
+fn parse_test_filter(test_str: String) -> Result(Filter, String) {
   case string.split_once(test_str, ".") {
-    Ok(#(module, name)) -> OnlyTest(module: module, name: name)
-    Error(Nil) -> All
+    Ok(#(module, name)) -> Ok(OnlyTest(module: module, name: name))
+    Error(Nil) ->
+      Error(
+        "Invalid --test format: '"
+        <> test_str
+        <> "'. Expected: module/path.function_name",
+      )
   }
 }
