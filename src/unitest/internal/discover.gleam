@@ -16,9 +16,10 @@ pub type ParsedTest {
   ParsedTest(name: String, tags: List(String))
 }
 
-pub fn path_to_module(path: String) -> String {
+pub fn path_to_module(path: String, base_path: String) -> String {
+  let prefix_length = string.length(base_path) + 1
   path
-  |> string.drop_start(5)
+  |> string.drop_start(prefix_length)
   |> string.drop_end(6)
 }
 
@@ -26,11 +27,11 @@ pub fn discover_from_fs(base_path: String) -> List(Test) {
   simplifile.get_files(base_path)
   |> result.unwrap([])
   |> list.filter(string.ends_with(_, ".gleam"))
-  |> list.flat_map(discover_tests_in_file)
+  |> list.flat_map(fn(path) { discover_tests_in_file(path, base_path) })
 }
 
-fn discover_tests_in_file(path: String) -> List(Test) {
-  let module_name = path_to_module(path)
+fn discover_tests_in_file(path: String, base_path: String) -> List(Test) {
+  let module_name = path_to_module(path, base_path)
 
   case simplifile.read(path) {
     Error(_) -> []
