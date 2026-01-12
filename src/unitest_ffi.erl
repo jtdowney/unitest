@@ -1,4 +1,4 @@
--module(unitest_ffi_erl).
+-module(unitest_ffi).
 
 -export([run_test/1, auto_seed/0, now_ms/0]).
 
@@ -12,12 +12,23 @@
 -include_lib("unitest/include/unitest@internal@test_failure_Literal.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Expression.hrl").
 
-get_file(Map) -> maps:get(file, Map, <<"">>).
-get_module(Map) -> maps:get(module, Map, <<"">>).
-get_function(Map) -> maps:get(function, Map, <<"">>).
-get_line(Map) -> maps:get(line, Map, 0).
-get_start(Map) -> maps:get(start, Map, 0).
-get_end(Map) -> maps:get('end', Map, 0).
+get_file(Map) ->
+    maps:get(file, Map, <<"">>).
+
+get_module(Map) ->
+    maps:get(module, Map, <<"">>).
+
+get_function(Map) ->
+    maps:get(function, Map, <<"">>).
+
+get_line(Map) ->
+    maps:get(line, Map, 0).
+
+get_start(Map) ->
+    maps:get(start, Map, 0).
+
+get_end(Map) ->
+    maps:get('end', Map, 0).
 
 %% Run a test function and return Ok(Nil) or Error(GleamPanic)
 %% Test is a Gleam record: {test, Module, Name, Tags}
@@ -55,54 +66,68 @@ parse_gleam_error(Reason) ->
     build_generic_panic(Reason).
 
 build_assert_panic(Map) ->
-    #test_failure{message = maps:get(message, Map, <<"Assertion failed">>),
-                  file = get_file(Map),
-                  module = get_module(Map),
-                  function = get_function(Map),
-                  line = get_line(Map),
-                  kind =
-                      #assert{start = get_start(Map),
-                              'end' = get_end(Map),
-                              expression_start = maps:get(expression_start, Map, 0),
-                              kind = build_assert_kind(Map)}}.
+    #test_failure{
+        message = maps:get(message, Map, <<"Assertion failed">>),
+        file = get_file(Map),
+        module = get_module(Map),
+        function = get_function(Map),
+        line = get_line(Map),
+        kind =
+            #assert{
+                start = get_start(Map),
+                'end' = get_end(Map),
+                expression_start = maps:get(expression_start, Map, 0),
+                kind = build_assert_kind(Map)
+            }
+    }.
 
 build_let_assert_panic(Map) ->
     Value = maps:get(value, Map, undefined),
-    #test_failure{message = maps:get(message, Map, <<"Let assert failed">>),
-                  file = get_file(Map),
-                  module = get_module(Map),
-                  function = get_function(Map),
-                  line = get_line(Map),
-                  kind =
-                      #let_assert{start = get_start(Map),
-                                  'end' = get_end(Map),
-                                  value = gleam@string:inspect(Value)}}.
+    #test_failure{
+        message = maps:get(message, Map, <<"Let assert failed">>),
+        file = get_file(Map),
+        module = get_module(Map),
+        function = get_function(Map),
+        line = get_line(Map),
+        kind =
+            #let_assert{
+                start = get_start(Map),
+                'end' = get_end(Map),
+                value = gleam@string:inspect(Value)
+            }
+    }.
 
 build_simple_panic(Map, Kind) ->
-    #test_failure{message = maps:get(message, Map, <<"Panic">>),
-                  file = get_file(Map),
-                  module = get_module(Map),
-                  function = get_function(Map),
-                  line = get_line(Map),
-                  kind = Kind}.
+    #test_failure{
+        message = maps:get(message, Map, <<"Panic">>),
+        file = get_file(Map),
+        module = get_module(Map),
+        function = get_function(Map),
+        line = get_line(Map),
+        kind = Kind
+    }.
 
 %% Build panic for generic/unknown errors
 build_generic_panic(Reason) ->
     Message = iolist_to_binary(io_lib:format("~p", [Reason])),
-    #test_failure{message = Message,
-                  file = <<>>,
-                  module = <<>>,
-                  function = <<>>,
-                  line = 0,
-                  kind = generic}.
+    #test_failure{
+        message = Message,
+        file = <<>>,
+        module = <<>>,
+        function = <<>>,
+        line = 0,
+        kind = generic
+    }.
 
 %% Build AssertKind based on the 'kind' field in the error map
 build_assert_kind(Map) ->
     case maps:get(kind, Map, undefined) of
         binary_operator ->
-            #binary_operator{operator = atom_to_binary(maps:get(operator, Map, '=='), utf8),
-                             left = build_asserted_expr(maps:get(left, Map, #{})),
-                             right = build_asserted_expr(maps:get(right, Map, #{}))};
+            #binary_operator{
+                operator = atom_to_binary(maps:get(operator, Map, '=='), utf8),
+                left = build_asserted_expr(maps:get(left, Map, #{})),
+                right = build_asserted_expr(maps:get(right, Map, #{}))
+            };
         function_call ->
             Args = maps:get(arguments, Map, []),
             #function_call{arguments = [build_asserted_expr(A) || A <- Args]};
@@ -110,20 +135,28 @@ build_assert_kind(Map) ->
             #other_expression{expression = build_asserted_expr(maps:get(expression, Map, #{}))};
         _ ->
             %% Fallback: treat as other_expression with unevaluated
-            #other_expression{expression =
-                                  #asserted_expr{start = 0,
-                                                 'end' = 0,
-                                                 kind = unevaluated}}
+            #other_expression{
+                expression =
+                    #asserted_expr{
+                        start = 0,
+                        'end' = 0,
+                        kind = unevaluated
+                    }
+            }
     end.
 
 build_asserted_expr(Map) when is_map(Map) ->
-    #asserted_expr{start = get_start(Map),
-                   'end' = get_end(Map),
-                   kind = build_expr_kind(Map)};
+    #asserted_expr{
+        start = get_start(Map),
+        'end' = get_end(Map),
+        kind = build_expr_kind(Map)
+    };
 build_asserted_expr(_) ->
-    #asserted_expr{start = 0,
-                   'end' = 0,
-                   kind = unevaluated}.
+    #asserted_expr{
+        start = 0,
+        'end' = 0,
+        kind = unevaluated
+    }.
 
 %% Build ExprKind from a map
 build_expr_kind(Map) ->

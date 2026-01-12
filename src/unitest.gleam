@@ -186,15 +186,15 @@ fn should_use_color(cli_no_color: Bool) -> Bool {
   }
 }
 
-@external(erlang, "unitest_ffi_erl", "now_ms")
+@external(erlang, "unitest_ffi", "now_ms")
 fn now_ms_ffi() -> Int
 
-@external(erlang, "unitest_ffi_erl", "run_test")
+@external(erlang, "unitest_ffi", "run_test")
 fn run_test_ffi(t: Test) -> Result(Nil, TestFailure)
 
 @external(erlang, "erlang", "halt")
 fn halt(code: Int) -> Nil
 
-@external(erlang, "unitest_ffi_erl", "auto_seed")
+@external(erlang, "unitest_ffi", "auto_seed")
 @external(javascript, "./unitest_ffi.mjs", "autoSeed")
 fn auto_seed() -> Int
