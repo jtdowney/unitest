@@ -1,4 +1,13 @@
+import { inspect as stringInspect } from "../gleam_stdlib/gleam/string.mjs";
 import { toList } from "./gleam.mjs";
+
+const runtime =
+  typeof Deno !== "undefined"
+    ? "deno"
+    : typeof process !== "undefined"
+      ? "node"
+      : null;
+
 import {
   outcome_char as outcomeChar,
   render_summary as renderSummary,
@@ -10,15 +19,116 @@ import {
   PlanItem$isRun,
   Report$Report,
 } from "./unitest/internal/runner.mjs";
+import {
+  TestFailure$TestFailure,
+  PanicKind$Assert,
+  PanicKind$Panic,
+  PanicKind$Todo,
+  PanicKind$LetAssert,
+  PanicKind$Generic,
+  AssertKind$BinaryOperator,
+  AssertKind$FunctionCall,
+  AssertKind$OtherExpression,
+  AssertedExpr$AssertedExpr,
+  ExprKind$Literal,
+  ExprKind$Expression,
+  ExprKind$Unevaluated,
+} from "./unitest/internal/test_failure.mjs";
 
 export function autoSeed() {
   return Date.now() % 1000000;
 }
 
+function parseErrorFromTest(error) {
+  if (error instanceof Error && error.gleam_error) {
+    const message = error.message || "Unknown error";
+    const file = error.file || "";
+    const module = error.module || "";
+    const fn = error.function || "";
+    const line = error.line || 0;
+
+    let kind;
+    switch (error.gleam_error) {
+      case "assert":
+        kind = PanicKind$Assert(
+          error.start || 0,
+          error.end || 0,
+          error.expression_start || 0,
+          buildAssertKind(error),
+        );
+        break;
+      case "panic":
+        kind = PanicKind$Panic();
+        break;
+      case "todo":
+        kind = PanicKind$Todo();
+        break;
+      case "let_assert":
+        kind = PanicKind$LetAssert(
+          error.start || 0,
+          error.end || 0,
+          stringInspect(error.value),
+        );
+        break;
+      default:
+        kind = PanicKind$Generic();
+    }
+
+    return TestFailure$TestFailure(message, file, module, fn, line, kind);
+  }
+
+  const message = error.message || String(error);
+  return TestFailure$TestFailure(message, "", "", "", 0, PanicKind$Generic());
+}
+
+function buildAssertKind(error) {
+  switch (error.kind) {
+    case "binary_operator":
+      return AssertKind$BinaryOperator(
+        String(error.operator || "=="),
+        buildAssertedExpr(error.left),
+        buildAssertedExpr(error.right),
+      );
+    case "function_call": {
+      const args = (error.arguments || []).map(buildAssertedExpr);
+      return AssertKind$FunctionCall(toList(args));
+    }
+    case "other_expression":
+      return AssertKind$OtherExpression(buildAssertedExpr(error.expression));
+    default:
+      return AssertKind$OtherExpression(
+        AssertedExpr$AssertedExpr(0, 0, ExprKind$Unevaluated()),
+      );
+  }
+}
+
+function buildAssertedExpr(expr) {
+  if (!expr) {
+    return AssertedExpr$AssertedExpr(0, 0, ExprKind$Unevaluated());
+  }
+
+  const start = expr.start || 0;
+  const end = expr.end || 0;
+
+  let kind;
+  switch (expr.kind) {
+    case "literal":
+      kind = ExprKind$Literal(stringInspect(expr.value));
+      break;
+    case "expression":
+      kind = ExprKind$Expression(stringInspect(expr.value));
+      break;
+    default:
+      kind = ExprKind$Unevaluated();
+  }
+
+  return AssertedExpr$AssertedExpr(start, end, kind);
+}
+
 function exit(code) {
-  if (typeof process !== "undefined") {
+  if (runtime === "node") {
     process.exit(code);
-  } else if (typeof Deno !== "undefined") {
+  } else if (runtime === "deno") {
     Deno.exit(code);
   }
 }
@@ -32,16 +142,15 @@ async function getPackageName() {
 
   try {
     let content;
-    if (typeof Deno !== "undefined") {
+    if (runtime === "deno") {
       content = await Deno.readTextFile("gleam.toml");
-    } else if (typeof process !== "undefined") {
+    } else if (runtime === "node") {
       const fs = await import("node:fs/promises");
       content = await fs.readFile("gleam.toml", "utf-8");
     } else {
       throw new Error("Unsupported JavaScript runtime");
     }
 
-    // Parse name from gleam.toml (simple regex for name = "...")
     const match = content.match(/^name\s*=\s*"([^"]+)"/m);
     if (match) {
       cachedPackageName = match[1];
@@ -54,16 +163,13 @@ async function getPackageName() {
 }
 
 function print(s) {
-  if (typeof process !== "undefined") {
+  if (runtime === "node") {
     process.stdout.write(s);
-  } else if (typeof Deno !== "undefined") {
+  } else if (runtime === "deno") {
     Deno.stdout.writeSync(new TextEncoder().encode(s));
   }
 }
 
-// JS-specific execute and finish function - handles async test running,
-// prints summary, and exits with appropriate code.
-// This is async but the runtime handles the Promise at top level.
 export async function execute_and_finish_js(plan, seed, useColor) {
   const startMs = Date.now();
   const packageName = await getPackageName();
@@ -92,19 +198,21 @@ export async function execute_and_finish_js(plan, seed, useColor) {
           print(outcomeChar(Outcome$Passed(), useColor));
         } else {
           const testEnd = Date.now();
-          const reason = `Function ${fnName} not found in module ${modulePath}`;
+          const error = parseErrorFromTest(
+            new Error(`Function ${fnName} not found in module ${modulePath}`),
+          );
           failed++;
-          print(outcomeChar(Outcome$Failed(reason), useColor));
+          print(outcomeChar(Outcome$Failed(error), useColor));
           failures.push(
-            FailedTest$FailedTest(test, reason, testEnd - testStart),
+            FailedTest$FailedTest(test, error, testEnd - testStart),
           );
         }
       } catch (e) {
         const testEnd = Date.now();
-        const reason = e.message || String(e);
+        const error = parseErrorFromTest(e);
         failed++;
-        print(outcomeChar(Outcome$Failed(reason), useColor));
-        failures.push(FailedTest$FailedTest(test, reason, testEnd - testStart));
+        print(outcomeChar(Outcome$Failed(error), useColor));
+        failures.push(FailedTest$FailedTest(test, error, testEnd - testStart));
       }
     } else {
       skipped++;

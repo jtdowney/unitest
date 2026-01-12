@@ -1,6 +1,7 @@
 import gleam/float
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/order
 import gleam/string
 import gleam/time/duration
@@ -10,6 +11,7 @@ import unitest/internal/cli.{
   type CliOptions, type Filter, All, OnlyModule, OnlyTag, OnlyTest,
 }
 import unitest/internal/discover.{type Test}
+import unitest/internal/test_failure.{type TestFailure, Assert, LetAssert}
 
 pub type PlanItem {
   Run(Test)
@@ -18,12 +20,12 @@ pub type PlanItem {
 
 pub type Outcome {
   Passed
-  Failed(reason: String)
+  Failed(reason: TestFailure)
   Skipped
 }
 
 pub type FailedTest {
-  FailedTest(item: Test, reason: String, duration_ms: Int)
+  FailedTest(item: Test, error: TestFailure, duration_ms: Int)
 }
 
 pub type Report {
@@ -40,7 +42,7 @@ pub type Report {
 pub type Platform {
   Platform(
     now_ms: fn() -> Int,
-    run_test: fn(Test) -> Result(Nil, String),
+    run_test: fn(Test) -> Result(Nil, TestFailure),
     print: fn(String) -> Nil,
   )
 }
@@ -79,27 +81,26 @@ fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem
   }
 }
 
-// --- Shuffle (from rng.gleam) ---
-
 pub fn shuffle(items: List(a), seed_value: Int) -> List(a) {
   let seed = random.new_seed(seed_value)
-  let #(random_list, _) =
+  let #(keys, _) =
     random.fixed_size_list(random.float(0.0, 1.0), list.length(items))
     |> random.step(seed)
-  list.zip(random_list, items)
-  |> list.index_map(fn(item, idx) { #(item, idx) })
+
+  list.zip(keys, items)
+  |> list.index_map(fn(pair, idx) {
+    let #(key, item) = pair
+    #(key, idx, item)
+  })
   |> list.sort(fn(a, b) {
-    let #(#(key_a, _), idx_a) = a
-    let #(#(key_b, _), idx_b) = b
+    let #(key_a, idx_a, _) = a
+    let #(key_b, idx_b, _) = b
     case float.compare(key_a, key_b) {
       order.Eq -> int.compare(idx_a, idx_b)
       other -> other
     }
   })
-  |> list.map(fn(tuple) {
-    let #(#(_, item), _) = tuple
-    item
-  })
+  |> list.map(fn(triple) { triple.2 })
 }
 
 pub fn execute(
@@ -121,13 +122,13 @@ pub fn execute(
               platform.print(outcome_char(Passed, use_color))
               #(p + 1, f, s, fails)
             }
-            Error(reason) -> {
+            Error(err) -> {
               let test_end = platform.now_ms()
               let duration = test_end - test_start
-              platform.print(outcome_char(Failed(reason), use_color))
+              platform.print(outcome_char(Failed(err), use_color))
               let failure =
-                FailedTest(item: t, reason: reason, duration_ms: duration)
-              #(p, f + 1, s, list.append(fails, [failure]))
+                FailedTest(item: t, error: err, duration_ms: duration)
+              #(p, f + 1, s, [failure, ..fails])
             }
           }
         }
@@ -144,7 +145,7 @@ pub fn execute(
     passed: passed,
     failed: failed,
     skipped: skipped,
-    failures: failures,
+    failures: list.reverse(failures),
     seed: seed,
     runtime_ms: end_ms - start_ms,
   )
@@ -211,15 +212,23 @@ fn format_skipped(skipped: Int, use_color: Bool) -> String {
 fn render_failures(failures: List(FailedTest), use_color: Bool) -> String {
   failures
   |> list.index_map(fn(f, idx) {
-    let num = int.to_string(idx + 1)
-    let name = f.item.module <> "." <> f.item.name
-    let dur = " (" <> format_duration(f.duration_ms) <> ")"
-    let header = num <> ") " <> name <> dur
-    let header = case use_color {
-      True -> ansi.red(header)
-      False -> header
+    let source = case f.error.kind {
+      Assert(start:, end:, ..) ->
+        test_failure.extract_snippet(f.error.file, start, end)
+      LetAssert(start:, end:, ..) ->
+        test_failure.extract_snippet(f.error.file, start, end)
+      _ -> option.None
     }
-    header <> "\n   " <> f.reason
+
+    test_failure.format_failure(
+      idx + 1,
+      f.item.module,
+      f.item.name,
+      f.duration_ms,
+      f.error,
+      source,
+      use_color,
+    )
   })
   |> string.join("\n\n")
 }
@@ -230,27 +239,20 @@ fn format_duration(ms: Int) -> String {
 }
 
 fn unit_to_string(amount: Int, unit: duration.Unit) -> String {
-  let plural = amount != 1
-  case unit, plural {
-    duration.Nanosecond, False -> "nanosecond"
-    duration.Nanosecond, True -> "nanoseconds"
-    duration.Microsecond, False -> "microsecond"
-    duration.Microsecond, True -> "microseconds"
-    duration.Millisecond, False -> "millisecond"
-    duration.Millisecond, True -> "milliseconds"
-    duration.Second, False -> "second"
-    duration.Second, True -> "seconds"
-    duration.Minute, False -> "minute"
-    duration.Minute, True -> "minutes"
-    duration.Hour, False -> "hour"
-    duration.Hour, True -> "hours"
-    duration.Day, False -> "day"
-    duration.Day, True -> "days"
-    duration.Week, False -> "week"
-    duration.Week, True -> "weeks"
-    duration.Month, False -> "month"
-    duration.Month, True -> "months"
-    duration.Year, False -> "year"
-    duration.Year, True -> "years"
+  let base = case unit {
+    duration.Nanosecond -> "nanosecond"
+    duration.Microsecond -> "microsecond"
+    duration.Millisecond -> "millisecond"
+    duration.Second -> "second"
+    duration.Minute -> "minute"
+    duration.Hour -> "hour"
+    duration.Day -> "day"
+    duration.Week -> "week"
+    duration.Month -> "month"
+    duration.Year -> "year"
+  }
+  case amount == 1 {
+    True -> base
+    False -> base <> "s"
   }
 }
