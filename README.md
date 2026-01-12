@@ -42,6 +42,12 @@ Run with `gleam test`.
 - **CLI filtering** by module, test name, or tag
 - **Streaming output**: `.` pass, `F` fail, `S` skip
 
+## Future Work?
+
+- Parallel execution
+- Wildcard filtering
+- Smarter tag discovery
+
 ## CLI Usage
 
 ```bash
