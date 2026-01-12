@@ -1,13 +1,12 @@
 //// Basic tests for the demo module.
 
 import demo
-import gleam/option.{None}
 import unitest.{Options}
 
 pub fn main() {
   // Skip "slow" tagged tests by default
   // Run them explicitly with: gleam test -- --tag slow
-  unitest.run(Options(seed: None, ignored_tags: ["slow"]))
+  unitest.run(Options(..unitest.default_options(), ignored_tags: ["slow"]))
 }
 
 pub fn add_positive_numbers_test() {
