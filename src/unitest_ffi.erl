@@ -31,8 +31,8 @@ get_end(Map) ->
     maps:get('end', Map, 0).
 
 %% Run a test function and return Ok(Nil) or Error(GleamPanic)
-%% Test is a Gleam record: {test, Module, Name, Tags}
-run_test({test, ModuleBin, NameBin, _Tags}) ->
+%% Test is a Gleam record: {test, Module, Name, Tags, FilePath, LineSpan}
+run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
     ModuleConverted = binary:replace(ModuleBin, <<"/">>, <<"@">>, [global]),
     Module = erlang:binary_to_atom(ModuleConverted, utf8),
     Name = erlang:binary_to_atom(NameBin, utf8),
