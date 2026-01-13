@@ -163,11 +163,12 @@ fn execute_and_finish(
     runner.Platform(now_ms: now_ms_ffi, run_test: run_test_ffi, print: io.print)
   let report = runner.execute(plan, seed, platform, use_color)
   let summary = runner.render_summary(report, use_color)
+
   io.println(summary)
-  case exit_code(report) {
-    0 -> Nil
-    code -> halt(code)
-  }
+
+  report
+  |> exit_code
+  |> halt
 }
 
 @internal
