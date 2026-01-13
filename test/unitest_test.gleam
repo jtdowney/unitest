@@ -1,9 +1,8 @@
-import gleeunit
 import unitest
 import unitest/internal/runner.{Report}
 
 pub fn main() -> Nil {
-  gleeunit.main()
+  unitest.main()
 }
 
 pub fn exit_code_zero_when_no_failures_test() {
