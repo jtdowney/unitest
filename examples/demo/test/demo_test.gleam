@@ -1,12 +1,18 @@
 //// Basic tests for the demo module.
+////
+//// To see failure UX demos, run:
+////   gleam test -- --tag failure_demo
 
 import demo
+import gleam/list
 import unitest.{Options}
 
 pub fn main() {
-  // Skip "slow" tagged tests by default
-  // Run them explicitly with: gleam test -- --tag slow
-  unitest.run(Options(..unitest.default_options(), ignored_tags: ["slow"]))
+  // Skip "slow" and "failure_demo" tagged tests by default
+  // Run failure demos with: gleam test -- --tag failure_demo
+  unitest.run(
+    Options(..unitest.default_options(), ignored_tags: ["slow", "failure_demo"]),
+  )
 }
 
 pub fn add_positive_numbers_test() {
@@ -43,4 +49,63 @@ pub fn is_even_true_test() {
 
 pub fn is_even_false_test() {
   assert demo.is_even(7) == False
+}
+
+// ============================================================================
+// Failure UX Demos
+// Run with: gleam test -- --tag failure_demo
+// ============================================================================
+
+/// Demo: Binary operator assertion failure (==, !=, <, >, etc.)
+/// Shows left and right values with their types (literal vs expression)
+pub fn failure_demo_assert_binary_operator_test() {
+  use <- unitest.tag("failure_demo")
+  let actual = demo.add(2, 2)
+  assert actual == 5
+}
+
+/// Demo: Function call assertion failure
+/// Shows the function arguments that were passed
+pub fn failure_demo_assert_function_call_test() {
+  use <- unitest.tag("failure_demo")
+  let numbers = [1, 2, 3]
+  assert list.contains(numbers, 42)
+}
+
+/// Demo: Simple expression assertion failure
+/// Shows the evaluated value of the expression
+pub fn failure_demo_assert_expression_test() {
+  use <- unitest.tag("failure_demo")
+  let result = demo.is_even(7)
+  assert result
+}
+
+/// Demo: Let assert pattern match failure
+/// Shows the actual value that didn't match the expected pattern
+pub fn failure_demo_let_assert_test() {
+  use <- unitest.tag("failure_demo")
+  let result = demo.divide(10, 0)
+  let assert Ok(value) = result
+  assert value == 5
+}
+
+/// Demo: Explicit panic
+/// Shows the panic message
+pub fn failure_demo_panic_test() {
+  use <- unitest.tag("failure_demo")
+  panic as "This is an intentional panic to demo the error formatting"
+}
+
+/// Demo: Todo expression reached
+/// Shows the todo message for unimplemented code
+pub fn failure_demo_todo_test() {
+  use <- unitest.tag("failure_demo")
+  todo as "This feature is not yet implemented"
+}
+
+/// Demo: Undefined function call (Generic error)
+/// Shows how runtime errors from missing functions are displayed
+pub fn failure_demo_undefined_function_test() {
+  use <- unitest.tag("failure_demo")
+  demo.call_undefined()
 }
