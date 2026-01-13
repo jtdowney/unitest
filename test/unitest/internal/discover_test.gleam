@@ -2,6 +2,14 @@ import gleam/list
 import gleam/string
 import unitest/internal/discover
 
+fn parsed_test_name(t: discover.ParsedTest) -> String {
+  t.name
+}
+
+fn parsed_test_tags(t: discover.ParsedTest) -> List(String) {
+  t.tags
+}
+
 pub fn path_to_module_simple_test() {
   let path = "test/foo/bar_test.gleam"
   assert discover.path_to_module(path, "test") == "foo/bar_test"
@@ -37,8 +45,9 @@ fn sort_tests(tests: List(discover.ParsedTest)) -> List(discover.ParsedTest) {
 
 pub fn detect_pub_fn_test() {
   let source = make_source("example_test() {\n  assert True\n}")
-  let result = discover.parse_module(source)
-  assert result == Ok([discover.ParsedTest(name: "example_test", tags: [])])
+  let assert Ok([t]) = discover.parse_module(source)
+  assert t.name == "example_test"
+  assert t.tags == []
 }
 
 pub fn ignore_non_public_fn_test() {
@@ -52,11 +61,8 @@ pub fn detect_multiple_tests_test() {
     make_source("alpha_test() { }\n") <> make_source("beta_test() { }")
   let assert Ok(tests) = discover.parse_module(source)
   let sorted = sort_tests(tests)
-  assert sorted
-    == [
-      discover.ParsedTest(name: "alpha_test", tags: []),
-      discover.ParsedTest(name: "beta_test", tags: []),
-    ]
+  assert list.map(sorted, parsed_test_name) == ["alpha_test", "beta_test"]
+  assert list.map(sorted, parsed_test_tags) == [[], []]
 }
 
 pub fn parse_single_tag_test() {
@@ -64,9 +70,9 @@ pub fn parse_single_tag_test() {
     make_source(
       "tagged_test() {\n  use <- unitest.tag(\"slow\")\n  assert True\n}",
     )
-  let result = discover.parse_module(source)
-  assert result
-    == Ok([discover.ParsedTest(name: "tagged_test", tags: ["slow"])])
+  let assert Ok([t]) = discover.parse_module(source)
+  assert t.name == "tagged_test"
+  assert t.tags == ["slow"]
 }
 
 pub fn parse_multiple_tags_test() {
@@ -74,9 +80,9 @@ pub fn parse_multiple_tags_test() {
     make_source(
       "multi_tag_test() {\n  use <- unitest.tag(\"slow\")\n  use <- unitest.tag(\"db\")\n  assert True\n}",
     )
-  let result = discover.parse_module(source)
-  assert result
-    == Ok([discover.ParsedTest(name: "multi_tag_test", tags: ["slow", "db"])])
+  let assert Ok([t]) = discover.parse_module(source)
+  assert t.name == "multi_tag_test"
+  assert t.tags == ["slow", "db"]
 }
 
 pub fn parse_tags_list_test() {
@@ -84,11 +90,9 @@ pub fn parse_tags_list_test() {
     make_source(
       "list_tag_test() {\n  use <- unitest.tags([\"slow\", \"integration\"])\n  assert True\n}",
     )
-  let result = discover.parse_module(source)
-  assert result
-    == Ok([
-      discover.ParsedTest(name: "list_tag_test", tags: ["slow", "integration"]),
-    ])
+  let assert Ok([t]) = discover.parse_module(source)
+  assert t.name == "list_tag_test"
+  assert t.tags == ["slow", "integration"]
 }
 
 pub fn tags_scoped_to_function_test() {
@@ -99,9 +103,55 @@ pub fn tags_scoped_to_function_test() {
     <> make_source("scoped_b_test() {\n  assert True\n}")
   let assert Ok(tests) = discover.parse_module(source)
   let sorted = sort_tests(tests)
-  assert sorted
-    == [
-      discover.ParsedTest(name: "scoped_a_test", tags: ["slow"]),
-      discover.ParsedTest(name: "scoped_b_test", tags: []),
-    ]
+  assert list.map(sorted, parsed_test_name)
+    == ["scoped_a_test", "scoped_b_test"]
+  assert list.map(sorted, parsed_test_tags) == [["slow"], []]
+}
+
+pub fn byte_offset_to_line_first_line_test() {
+  let source = "line1\nline2\nline3"
+  assert discover.byte_offset_to_line(source, 0) == 1
+}
+
+pub fn byte_offset_to_line_second_line_test() {
+  let source = "line1\nline2\nline3"
+  assert discover.byte_offset_to_line(source, 6) == 2
+}
+
+pub fn byte_offset_to_line_third_line_test() {
+  let source = "line1\nline2\nline3"
+  assert discover.byte_offset_to_line(source, 12) == 3
+}
+
+pub fn byte_offset_to_line_mid_line_test() {
+  let source = "line1\nline2\nline3"
+  assert discover.byte_offset_to_line(source, 3) == 1
+  assert discover.byte_offset_to_line(source, 8) == 2
+}
+
+pub fn parse_module_captures_byte_spans_test() {
+  let source =
+    "pub fn first_test() {\n  Nil\n}\n\npub fn second_test() {\n  Nil\n}"
+  let assert Ok(tests) = discover.parse_module(source)
+  let sorted = sort_tests(tests)
+  assert list.length(sorted) == 2
+  let assert [first, second] = sorted
+  assert first.byte_span.start < second.byte_span.start
+  assert first.byte_span.start == 0
+}
+
+pub fn byte_offset_to_line_unicode_test() {
+  // "日" is 3 bytes in UTF-8, so byte offset 4 is after the newline
+  let source = "日\nline2"
+  assert discover.byte_offset_to_line(source, 0) == 1
+  assert discover.byte_offset_to_line(source, 3) == 1
+  assert discover.byte_offset_to_line(source, 4) == 2
+}
+
+pub fn byte_offset_to_line_multibyte_test() {
+  // Multiple multibyte characters: "日本" (6 bytes) + newline + "x"
+  let source = "日本\nx"
+  assert discover.byte_offset_to_line(source, 0) == 1
+  assert discover.byte_offset_to_line(source, 6) == 1
+  assert discover.byte_offset_to_line(source, 7) == 2
 }

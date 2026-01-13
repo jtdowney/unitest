@@ -8,9 +8,9 @@ import gleam/time/duration
 import gleam_community/ansi
 import prng/random
 import unitest/internal/cli.{
-  type CliOptions, type Filter, All, OnlyModule, OnlyTag, OnlyTest,
+  type CliOptions, type Filter, AllLocations, OnlyFile, OnlyFileAtLine, OnlyTest,
 }
-import unitest/internal/discover.{type Test}
+import unitest/internal/discover.{type LineSpan, type Test}
 import unitest/internal/test_failure.{type TestFailure, Assert, LetAssert}
 
 pub type PlanItem {
@@ -61,18 +61,40 @@ pub fn plan(
 }
 
 fn should_include(t: Test, filter: Filter) -> Bool {
-  case filter {
-    All -> True
+  let location_match = case filter.location {
+    AllLocations -> True
     OnlyTest(module, name) -> t.module == module && t.name == name
-    OnlyModule(module) -> t.module == module
-    OnlyTag(tag) -> list.contains(t.tags, tag)
+    OnlyFile(path) -> path_matches(t.file_path, path)
+    OnlyFileAtLine(path, line) ->
+      path_matches(t.file_path, path) && line_in_span(line, t.line_span)
   }
+
+  let tag_match = case filter.tag {
+    option.None -> True
+    option.Some(tag) -> list.contains(t.tags, tag)
+  }
+
+  location_match && tag_match
+}
+
+fn path_matches(test_path: String, filter_path: String) -> Bool {
+  test_path == filter_path || string.ends_with(test_path, "/" <> filter_path)
+}
+
+fn line_in_span(line: Int, span: LineSpan) -> Bool {
+  line >= span.start_line && line <= span.end_line
 }
 
 fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem {
-  let skip = case filter {
-    OnlyTag(_) -> False
-    _ -> list.any(t.tags, fn(tag) { list.contains(ignored_tags, tag) })
+  // Skip ignored_tags check when explicitly targeting:
+  // - A specific tag (--tag)
+  // - A specific test (--test)
+  // - A specific line (file:line)
+  let skip = case filter.tag, filter.location {
+    option.Some(_), _ -> False
+    _, OnlyTest(_, _) -> False
+    _, OnlyFileAtLine(_, _) -> False
+    _, _ -> list.any(t.tags, fn(tag) { list.contains(ignored_tags, tag) })
   }
 
   case skip {

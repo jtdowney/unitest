@@ -1,8 +1,8 @@
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import gleam/string
 import unitest/internal/cli
-import unitest/internal/discover.{Test}
+import unitest/internal/discover.{type Test, LineSpan, Test}
 import unitest/internal/runner.{
   Failed, Passed, Platform, Report, Run, Skip, Skipped,
 }
@@ -19,10 +19,20 @@ fn test_failure(message: String) -> TestFailure {
   )
 }
 
+fn make_test(module: String, name: String, tags: List(String)) -> Test {
+  Test(
+    module: module,
+    name: name,
+    tags: tags,
+    file_path: "test/" <> module <> ".gleam",
+    line_span: LineSpan(1, 100),
+  )
+}
+
 pub fn execute_passing_tests_counts_passed_test() {
-  let t1 = Test(module: "foo", name: "a_test", tags: [])
-  let t2 = Test(module: "foo", name: "b_test", tags: [])
-  let t3 = Test(module: "foo", name: "c_test", tags: [])
+  let t1 = make_test("foo", "a_test", [])
+  let t2 = make_test("foo", "b_test", [])
+  let t3 = make_test("foo", "c_test", [])
   let plan = [Run(t1), Run(t2), Run(t3)]
 
   let platform =
@@ -39,7 +49,7 @@ pub fn execute_passing_tests_counts_passed_test() {
 }
 
 pub fn execute_failing_test_counts_failure_test() {
-  let t1 = Test(module: "foo", name: "bad_test", tags: [])
+  let t1 = make_test("foo", "bad_test", [])
   let plan = [Run(t1)]
 
   let platform =
@@ -61,7 +71,7 @@ pub fn execute_failing_test_counts_failure_test() {
 }
 
 pub fn execute_skipped_test_counts_skipped_test() {
-  let t1 = Test(module: "foo", name: "slow_test", tags: ["slow"])
+  let t1 = make_test("foo", "slow_test", ["slow"])
   let plan = [Skip(t1)]
 
   let platform =
@@ -77,7 +87,7 @@ pub fn execute_skipped_test_counts_skipped_test() {
 }
 
 pub fn execute_captures_runtime_test() {
-  let t1 = Test(module: "foo", name: "a_test", tags: [])
+  let t1 = make_test("foo", "a_test", [])
   let plan = [Run(t1)]
 
   let platform =
@@ -91,9 +101,14 @@ pub fn execute_captures_runtime_test() {
 }
 
 pub fn plan_all_with_no_filter_test() {
-  let t1 = Test(module: "foo", name: "a_test", tags: [])
-  let t2 = Test(module: "foo", name: "b_test", tags: [])
-  let cli_opts = cli.CliOptions(seed: None, filter: cli.All, no_color: False)
+  let t1 = make_test("foo", "a_test", [])
+  let t2 = make_test("foo", "b_test", [])
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.AllLocations, tag: None),
+      no_color: False,
+    )
 
   let result = runner.plan([t1, t2], cli_opts, [])
 
@@ -101,20 +116,29 @@ pub fn plan_all_with_no_filter_test() {
 }
 
 pub fn ignored_tags_cause_skip_test() {
-  let t1 = Test(module: "foo", name: "fast_test", tags: [])
-  let t2 = Test(module: "foo", name: "slow_test", tags: ["slow"])
-  let cli_opts = cli.CliOptions(seed: None, filter: cli.All, no_color: False)
+  let t1 = make_test("foo", "fast_test", [])
+  let t2 = make_test("foo", "slow_test", ["slow"])
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.AllLocations, tag: None),
+      no_color: False,
+    )
 
   let result = runner.plan([t1, t2], cli_opts, ["slow"])
 
   assert result == [Run(t1), Skip(t2)]
 }
 
-pub fn only_module_filter_test() {
-  let t1 = Test(module: "foo", name: "a_test", tags: [])
-  let t2 = Test(module: "bar", name: "b_test", tags: [])
+pub fn only_file_filter_by_name_test() {
+  let t1 = make_test("foo", "a_test", [])
+  let t2 = make_test("bar", "b_test", [])
   let cli_opts =
-    cli.CliOptions(seed: None, filter: cli.OnlyModule("foo"), no_color: False)
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: None),
+      no_color: False,
+    )
 
   let result = runner.plan([t1, t2], cli_opts, [])
 
@@ -122,12 +146,12 @@ pub fn only_module_filter_test() {
 }
 
 pub fn only_test_filter_test() {
-  let t1 = Test(module: "foo", name: "a_test", tags: [])
-  let t2 = Test(module: "foo", name: "b_test", tags: [])
+  let t1 = make_test("foo", "a_test", [])
+  let t2 = make_test("foo", "b_test", [])
   let cli_opts =
     cli.CliOptions(
       seed: None,
-      filter: cli.OnlyTest("foo", "a_test"),
+      filter: cli.Filter(location: cli.OnlyTest("foo", "a_test"), tag: None),
       no_color: False,
     )
 
@@ -137,10 +161,14 @@ pub fn only_test_filter_test() {
 }
 
 pub fn only_tag_filter_test() {
-  let t1 = Test(module: "foo", name: "fast_test", tags: [])
-  let t2 = Test(module: "foo", name: "slow_test", tags: ["slow"])
+  let t1 = make_test("foo", "fast_test", [])
+  let t2 = make_test("foo", "slow_test", ["slow"])
   let cli_opts =
-    cli.CliOptions(seed: None, filter: cli.OnlyTag("slow"), no_color: False)
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.AllLocations, tag: Some("slow")),
+      no_color: False,
+    )
 
   let result = runner.plan([t1, t2], cli_opts, [])
 
@@ -148,9 +176,13 @@ pub fn only_tag_filter_test() {
 }
 
 pub fn tag_filter_overrides_ignored_tags_test() {
-  let t1 = Test(module: "foo", name: "slow_test", tags: ["slow"])
+  let t1 = make_test("foo", "slow_test", ["slow"])
   let cli_opts =
-    cli.CliOptions(seed: None, filter: cli.OnlyTag("slow"), no_color: False)
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.AllLocations, tag: Some("slow")),
+      no_color: False,
+    )
 
   let result = runner.plan([t1], cli_opts, ["slow"])
 
@@ -245,4 +277,206 @@ pub fn summary_includes_totals_test() {
     )
   let summary = runner.render_summary(report, False)
   assert string.contains(summary, "5 passed, no failures")
+}
+
+pub fn only_file_filter_test() {
+  let t1 =
+    Test(
+      module: "foo",
+      name: "a_test",
+      tags: [],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let t2 =
+    Test(
+      module: "bar",
+      name: "b_test",
+      tags: [],
+      file_path: "test/bar.gleam",
+      line_span: LineSpan(5, 15),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: None),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1, t2], cli_opts, [])
+
+  assert result == [Run(t1)]
+}
+
+pub fn only_file_relative_path_filter_test() {
+  let t1 =
+    Test(
+      module: "foo",
+      name: "a_test",
+      tags: [],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: None),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1], cli_opts, [])
+
+  assert result == [Run(t1)]
+}
+
+pub fn file_at_line_filter_matches_span_test() {
+  let t1 =
+    Test(
+      module: "foo",
+      name: "first_test",
+      tags: [],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let t2 =
+    Test(
+      module: "foo",
+      name: "second_test",
+      tags: [],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(25, 35),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(
+        location: cli.OnlyFileAtLine(path: "test/foo.gleam", line: 15),
+        tag: None,
+      ),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1, t2], cli_opts, [])
+
+  assert result == [Run(t1)]
+}
+
+pub fn file_at_line_no_match_returns_empty_test() {
+  let t1 =
+    Test(
+      module: "foo",
+      name: "a_test",
+      tags: [],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(
+        location: cli.OnlyFileAtLine(path: "test/foo.gleam", line: 50),
+        tag: None,
+      ),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1], cli_opts, [])
+
+  assert result == []
+}
+
+pub fn file_and_tag_combined_includes_matching_test() {
+  let t1 =
+    Test(
+      module: "foo",
+      name: "slow_test",
+      tags: ["slow"],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let t2 =
+    Test(
+      module: "foo",
+      name: "fast_test",
+      tags: [],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(25, 35),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(
+        location: cli.OnlyFile("test/foo.gleam"),
+        tag: Some("slow"),
+      ),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1, t2], cli_opts, [])
+
+  assert result == [Run(t1)]
+}
+
+pub fn file_and_tag_excludes_wrong_tag_test() {
+  let t1 =
+    Test(
+      module: "foo",
+      name: "fast_test",
+      tags: ["fast"],
+      file_path: "test/foo.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(
+        location: cli.OnlyFile("test/foo.gleam"),
+        tag: Some("slow"),
+      ),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1], cli_opts, [])
+
+  assert result == []
+}
+
+pub fn file_and_tag_excludes_wrong_file_test() {
+  let t1 =
+    Test(
+      module: "bar",
+      name: "slow_test",
+      tags: ["slow"],
+      file_path: "test/bar.gleam",
+      line_span: LineSpan(10, 20),
+    )
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(
+        location: cli.OnlyFile("test/foo.gleam"),
+        tag: Some("slow"),
+      ),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1], cli_opts, [])
+
+  assert result == []
+}
+
+pub fn file_and_tag_combined_by_name_test() {
+  let t1 = make_test("foo", "slow_test", ["slow"])
+  let t2 = make_test("foo", "fast_test", [])
+  let t3 = make_test("bar", "slow_test", ["slow"])
+  let cli_opts =
+    cli.CliOptions(
+      seed: None,
+      filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: Some("slow")),
+      no_color: False,
+    )
+
+  let result = runner.plan([t1, t2, t3], cli_opts, [])
+
+  assert result == [Run(t1)]
 }
