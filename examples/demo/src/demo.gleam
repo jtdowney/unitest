@@ -26,3 +26,8 @@ pub fn fibonacci(n: Int) -> Int {
     _ -> fibonacci(n - 1) + fibonacci(n - 2)
   }
 }
+
+/// Calls a non-existent function to demo undefined function errors
+@external(erlang, "nonexistent_module", "nonexistent_function")
+@external(javascript, "./demo_ffi.mjs", "nonexistentFunction")
+pub fn call_undefined() -> Nil
