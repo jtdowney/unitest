@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Unitest is a Gleam test runner library intended as a drop-in replacement for gleeunit with additional features: random test ordering (with reproducible seeds), test tagging, and CLI filtering by module/test/tag.
+Unitest is a Gleam test runner library intended as a drop-in replacement for gleeunit with additional features: random test ordering (with reproducible seeds), test tagging, and CLI filtering by file path, line number, test name, or tag.
 
 ## Commands
 
@@ -20,10 +20,12 @@ gleam add <package>            # Add dependency (gets latest version)
 ### CLI Flags (passed after `--`)
 
 ```bash
-gleam test -- --seed 123           # Reproducible ordering
-gleam test -- --test my/mod.fn_test   # Run single test
-gleam test -- --module my/mod_test    # Run single module
-gleam test -- --tag slow              # Run tests with tag
+gleam test -- --seed 123                      # Reproducible ordering
+gleam test -- test/my_mod_test.gleam          # Run all tests in file
+gleam test -- test/my_mod_test.gleam:42       # Run test at line 42
+gleam test -- --test my/mod.fn_test           # Run single test by name
+gleam test -- --tag slow                      # Run tests with tag
+gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag filters
 ```
 
 ## Architecture
@@ -41,7 +43,7 @@ gleam test -- --tag slow              # Run tests with tag
 - `cli.gleam` - argv parsing → structured CLI options
 - `model.gleam` - types: Test, Filter, PlanItem, Outcome, Report
 - `parse.gleam` - extract test functions + tags from Gleam source (static analysis)
-- `select.gleam` - filter precedence: `--test` > `--module` > `--tag` > `ignored_tags`
+- `select.gleam` - filter precedence: `--test` > `file:line` > `file` > `--tag` > `ignored_tags`
 - `rng.gleam` - deterministic PRNG + shuffle
 - `run.gleam` - orchestration: discover → select → shuffle → execute → report
 - `format_dot.gleam` - streaming `.`/`F`/`S` output + summary
