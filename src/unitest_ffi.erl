@@ -40,16 +40,16 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
         Module:Name(),
         {ok, nil}
     catch
-        error:Reason:_Stack ->
-            {error, parse_gleam_error(Reason)};
-        throw:Reason:_Stack ->
-            {error, parse_gleam_error(Reason)};
-        exit:Reason:_Stack ->
-            {error, parse_gleam_error(Reason)}
+        error:Reason:Stack ->
+            {error, parse_gleam_error(Reason, Stack)};
+        throw:Reason:Stack ->
+            {error, parse_gleam_error(Reason, Stack)};
+        exit:Reason:Stack ->
+            {error, parse_gleam_error(Reason, Stack)}
     end.
 
 %% Parse Gleam error maps into GleamPanic records
-parse_gleam_error(Reason) when is_map(Reason) ->
+parse_gleam_error(Reason, _Stack) when is_map(Reason) ->
     case maps:get(gleam_error, Reason, undefined) of
         assert ->
             build_assert_panic(Reason);
@@ -60,10 +60,12 @@ parse_gleam_error(Reason) when is_map(Reason) ->
         let_assert ->
             build_let_assert_panic(Reason);
         _ ->
-            build_generic_panic(Reason)
+            build_generic_panic(Reason, [])
     end;
-parse_gleam_error(Reason) ->
-    build_generic_panic(Reason).
+parse_gleam_error(undef, Stack) ->
+    build_undef_panic(Stack);
+parse_gleam_error(Reason, Stack) ->
+    build_generic_panic(Reason, Stack).
 
 build_assert_panic(Map) ->
     #test_failure{
@@ -107,9 +109,42 @@ build_simple_panic(Map, Kind) ->
         kind = Kind
     }.
 
+%% Build panic for undefined function errors
+build_undef_panic([{M, F, A, _Info} | _Rest]) ->
+    Arity = case A of
+        Args when is_list(Args) -> length(Args);
+        N when is_integer(N) -> N
+    end,
+    Message = iolist_to_binary(io_lib:format(
+        "Undefined function: ~s:~s/~B",
+        [M, F, Arity]
+    )),
+    #test_failure{
+        message = Message,
+        file = <<>>,
+        module = <<>>,
+        function = <<>>,
+        line = 0,
+        kind = generic
+    };
+build_undef_panic(_) ->
+    #test_failure{
+        message = <<"Undefined function">>,
+        file = <<>>,
+        module = <<>>,
+        function = <<>>,
+        line = 0,
+        kind = generic
+    }.
+
 %% Build panic for generic/unknown errors
-build_generic_panic(Reason) ->
-    Message = iolist_to_binary(io_lib:format("~p", [Reason])),
+build_generic_panic(Reason, Stack) ->
+    StackInfo = format_stack_summary(Stack),
+    BaseMessage = iolist_to_binary(io_lib:format("~p", [Reason])),
+    Message = case StackInfo of
+        <<>> -> BaseMessage;
+        _ -> <<BaseMessage/binary, "\n", StackInfo/binary>>
+    end,
     #test_failure{
         message = Message,
         file = <<>>,
@@ -118,6 +153,22 @@ build_generic_panic(Reason) ->
         line = 0,
         kind = generic
     }.
+
+%% Format a brief stack summary (first meaningful frame)
+format_stack_summary([{M, F, A, Info} | _]) ->
+    Arity = case A of
+        Args when is_list(Args) -> length(Args);
+        N when is_integer(N) -> N
+    end,
+    case proplists:get_value(file, Info) of
+        undefined ->
+            iolist_to_binary(io_lib:format("  in ~s:~s/~B", [M, F, Arity]));
+        File ->
+            Line = proplists:get_value(line, Info, 0),
+            iolist_to_binary(io_lib:format("  in ~s:~s/~B (~s:~B)", [M, F, Arity, File, Line]))
+    end;
+format_stack_summary(_) ->
+    <<>>.
 
 %% Build AssertKind based on the 'kind' field in the error map
 build_assert_kind(Map) ->

@@ -77,8 +77,52 @@ function parseErrorFromTest(error) {
     return TestFailure$TestFailure(message, file, module, fn, line, kind);
   }
 
-  const message = error.message || String(error);
+  const message = formatGenericError(error);
   return TestFailure$TestFailure(message, "", "", "", 0, PanicKind$Generic());
+}
+
+function formatGenericError(error) {
+  const errorMessage = error.message || String(error);
+
+  // Module not found errors
+  if (
+    errorMessage.includes("Cannot find module") ||
+    errorMessage.includes("Module not found") ||
+    errorMessage.includes("does not provide an export")
+  ) {
+    // Extract module name from error message if possible
+    const moduleMatch = errorMessage.match(
+      /Cannot find module ['"]([^'"]+)['"]/,
+    );
+    if (moduleMatch) {
+      return `Module not found: ${moduleMatch[1]}`;
+    }
+    const exportMatch = errorMessage.match(
+      /does not provide an export named ['"]([^'"]+)['"]/,
+    );
+    if (exportMatch) {
+      return `Undefined function: ${exportMatch[1]}`;
+    }
+    return errorMessage;
+  }
+
+  // TypeError for calling undefined as function
+  if (error instanceof TypeError) {
+    const undefMatch = errorMessage.match(/(\w+) is not a function/);
+    if (undefMatch) {
+      return `Undefined function: ${undefMatch[1]}`;
+    }
+  }
+
+  // ReferenceError for undefined variables
+  if (error instanceof ReferenceError) {
+    const refMatch = errorMessage.match(/(\w+) is not defined/);
+    if (refMatch) {
+      return `Undefined: ${refMatch[1]}`;
+    }
+  }
+
+  return errorMessage;
 }
 
 function buildAssertKind(error) {
