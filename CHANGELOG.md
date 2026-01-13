@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-12
+
+### Added
+
+- **File path filtering**: Run tests in a specific file with `gleam test -- test/my_mod_test.gleam`
+- **Line number filtering**: Run the test at a specific line with `gleam test -- test/my_mod_test.gleam:42`
+- **Improved error messages**: Better context when undefined functions are referenced
+
+### Fixed
+
+- Always halt the VM regardless of test exit code, ensuring proper cleanup (#1)
+
 ## [1.0.0] - 2026-01-11
 
 Initial release of unitest, a Gleam test runner with random ordering, tagging, and CLI filtering.
@@ -24,4 +36,5 @@ Initial release of unitest, a Gleam test runner with random ordering, tagging, a
 - **Color output**: Colored output by default, respects `NO_COLOR` environment variable and `--no-color` flag
 - **Cross-platform support**: Works on Erlang and JavaScript targets
 
+[1.1.0]: https://github.com/jtdowney/unitest/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jtdowney/unitest/releases/tag/v1.0.0
