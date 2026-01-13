@@ -39,7 +39,7 @@ Run with `gleam test`.
 
 - **Random test ordering** with reproducible seeds
 - **Test tagging** for categorization and filtering
-- **CLI filtering** by module, test name, or tag
+- **CLI filtering** by file path, line number, test name, or tag
 - **Streaming output**: `.` pass, `F` fail, `S` skip
 
 ## Future Work?
@@ -51,12 +51,16 @@ Run with `gleam test`.
 ## CLI Usage
 
 ```bash
-gleam test                            # Random order
-gleam test -- --seed 123              # Reproducible order
-gleam test -- --module my_mod_test    # Single module
-gleam test -- --test my_mod_test.fn   # Single test
-gleam test -- --tag slow              # Tests with tag
+gleam test                                    # Random order
+gleam test -- --seed 123                      # Reproducible order
+gleam test -- test/my_mod_test.gleam          # All tests in file
+gleam test -- test/my_mod_test.gleam:42       # Test at line 42
+gleam test -- --test my_mod_test.fn           # Single test by name
+gleam test -- --tag slow                      # Tests with tag
+gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag
 ```
+
+The positional file argument supports partial matching, so `my_mod_test.gleam` will match `test/my_mod_test.gleam`.
 
 ## Tagging Tests
 
