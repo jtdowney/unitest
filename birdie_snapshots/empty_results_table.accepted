@@ -1,0 +1,10 @@
+---
+version: 1.5.3
+title: empty results table
+file: ./test/unitest/internal/format_table_test.gleam
+test_name: empty_results_test
+---
++--------+--------+------+----------+
+| Status | Module | Test | Duration |
++--------+--------+------+----------+
++--------+--------+------+----------+

@@ -19,8 +19,18 @@ pub type Filter {
   Filter(location: LocationFilter, tag: Option(String))
 }
 
+pub type Reporter {
+  DotReporter
+  TableReporter
+}
+
 pub type CliOptions {
-  CliOptions(seed: Option(Int), filter: Filter, no_color: Bool)
+  CliOptions(
+    seed: Option(Int),
+    filter: Filter,
+    no_color: Bool,
+    reporter: Reporter,
+  )
 }
 
 pub fn parse(args: List(String)) -> Result(CliOptions, String) {
@@ -31,13 +41,22 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       use module_result <- clip.parameter
       use tag_result <- clip.parameter
       use no_color <- clip.parameter
+      use reporter_str <- clip.parameter
       use file_result <- clip.parameter
 
       let seed = case seed_result {
         Ok(s) -> Some(s)
         Error(Nil) -> None
       }
-      #(file_result, seed, test_result, module_result, tag_result, no_color)
+      #(
+        file_result,
+        seed,
+        test_result,
+        module_result,
+        tag_result,
+        no_color,
+        reporter_str,
+      )
     })
     |> clip.opt(
       opt.new("seed")
@@ -61,6 +80,11 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       |> opt.optional,
     )
     |> clip.flag(flag.new("no-color") |> flag.help("Disable colored output"))
+    |> clip.opt(
+      opt.new("reporter")
+      |> opt.help("Output format: dot (default) or table")
+      |> opt.default("dot"),
+    )
     |> clip.arg(
       arg.new("file")
       |> arg.help(
@@ -69,7 +93,17 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       |> arg.optional,
     )
 
-  use #(file_result, seed, test_result, module_result, tag_result, no_color) <- result.try(
+  use
+    #(
+      file_result,
+      seed,
+      test_result,
+      module_result,
+      tag_result,
+      no_color,
+      reporter_str,
+    )
+  <- result.try(
     command
     |> clip.help(help.simple("unitest", "Simple unit testing framework"))
     |> clip.run(args),
@@ -81,7 +115,21 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
     module_result,
     tag_result,
   ))
-  Ok(CliOptions(seed: seed, filter: filter, no_color: no_color))
+  use reporter <- result.try(parse_reporter(reporter_str))
+  Ok(CliOptions(
+    seed: seed,
+    filter: filter,
+    no_color: no_color,
+    reporter: reporter,
+  ))
+}
+
+fn parse_reporter(reporter_str: String) -> Result(Reporter, String) {
+  case reporter_str {
+    "dot" -> Ok(DotReporter)
+    "table" -> Ok(TableReporter)
+    other -> Error("Invalid reporter: '" <> other <> "'. Use 'dot' or 'table'")
+  }
 }
 
 fn resolve_filter(

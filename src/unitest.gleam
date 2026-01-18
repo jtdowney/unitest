@@ -7,14 +7,18 @@
 
 import argv
 import envoy
+import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/order
 import gleam/string
-import unitest/internal/cli
+import gleam_community/ansi
+import spinner
+import unitest/internal/cli.{type Reporter, DotReporter, TableReporter}
 import unitest/internal/discover.{type Test}
-import unitest/internal/runner.{type Report}
+import unitest/internal/format_table
+import unitest/internal/runner.{type Progress, type Report, type TestResult}
 import unitest/internal/test_failure.{type TestFailure}
 
 /// Configuration options for the test runner.
@@ -148,7 +152,7 @@ fn run_with_args(args: List(String), options: Options) -> Nil {
 
       let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
 
-      execute_and_finish(plan, chosen_seed, use_color)
+      execute_and_finish(plan, chosen_seed, use_color, cli_opts.reporter)
     }
   }
 }
@@ -158,15 +162,44 @@ fn execute_and_finish(
   plan: List(runner.PlanItem),
   seed: Int,
   use_color: Bool,
+  reporter: Reporter,
 ) -> Nil {
   let platform =
     runner.Platform(now_ms: now_ms_ffi, run_test: run_test_ffi, print: io.print)
-  let report = runner.execute(plan, seed, platform, use_color)
-  let summary = runner.render_summary(report, use_color)
 
-  io.println(summary)
+  let exec_result = case reporter {
+    DotReporter -> {
+      let on_result = fn(result: TestResult, _progress: Progress) {
+        io.print(runner.outcome_char(result.outcome, use_color))
+      }
+      runner.execute(plan, seed, platform, on_result)
+    }
+    TableReporter -> {
+      let sp =
+        spinner.new("Running tests...")
+        |> spinner.with_colour(ansi.cyan)
+        |> spinner.start
 
-  report
+      let on_result = fn(_result: TestResult, progress: Progress) {
+        let text =
+          "Running tests... "
+          <> int.to_string(progress.current)
+          <> "/"
+          <> int.to_string(progress.total)
+        spinner.set_text(sp, text)
+      }
+
+      let result = runner.execute(plan, seed, platform, on_result)
+      spinner.stop(sp)
+
+      io.print(format_table.render_table(result.results, use_color))
+      result
+    }
+  }
+
+  io.println(runner.render_summary(exec_result.report, use_color))
+
+  exec_result.report
   |> exit_code
   |> halt
 }
