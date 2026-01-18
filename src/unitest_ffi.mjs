@@ -11,14 +11,26 @@ const runtime =
 import {
   outcome_char as outcomeChar,
   render_summary as renderSummary,
-  FailedTest$FailedTest,
   Outcome$Failed,
   Outcome$Passed,
   Outcome$Skipped,
   PlanItem$Run$0,
   PlanItem$isRun,
+  PlanItem$Skip$0,
   Report$Report,
+  ExecuteResult$ExecuteResult,
+  TestResult$TestResult,
 } from "./unitest/internal/runner.mjs";
+import { Reporter$isDotReporter } from "./unitest/internal/cli.mjs";
+import { render_table as renderTable } from "./unitest/internal/format_table.mjs";
+import {
+  new$ as spinnerNew,
+  start as spinnerStart,
+  stop as spinnerStop,
+  set_text as spinnerSetText,
+  with_colour as spinnerWithColour,
+} from "../spinner/spinner.mjs";
+import { cyan as ansiCyan } from "../gleam_community_ansi/gleam_community/ansi.mjs";
 import {
   TestFailure$TestFailure,
   PanicKind$Assert,
@@ -214,18 +226,54 @@ function print(s) {
   }
 }
 
-export async function execute_and_finish_js(plan, seed, useColor) {
+export async function execute_and_finish_js(plan, seed, useColor, reporter) {
   const startMs = Date.now();
   const packageName = await getPackageName();
+  const isDotReporter = Reporter$isDotReporter(reporter);
 
   let passed = 0;
   let failed = 0;
   let skipped = 0;
-  let failures = [];
+  const failures = [];
+  const results = [];
 
   const planArray = plan.toArray();
+  const total = planArray.length;
 
+  const sp = isDotReporter
+    ? null
+    : spinnerStart(spinnerWithColour(spinnerNew("Running tests..."), ansiCyan));
+
+  function reportProgress(outcome, current) {
+    if (isDotReporter) {
+      print(outcomeChar(outcome, useColor));
+    } else {
+      spinnerSetText(sp, `Running tests... ${current}/${total}`);
+    }
+  }
+
+  function recordResult(test, outcome, duration, isFailure) {
+    const result = TestResult$TestResult(test, outcome, duration);
+    results.push(result);
+    if (isFailure) {
+      failures.push(result);
+    }
+  }
+
+  const yieldToEventLoop = () =>
+    new Promise((r) =>
+      typeof setImmediate !== "undefined" ? setImmediate(r) : setTimeout(r, 0),
+    );
+
+  let current = 0;
   for (const item of planArray) {
+    current++;
+
+    // Yield periodically to allow spinner's setInterval to fire
+    if (!isDotReporter && current % 5 === 0) {
+      await yieldToEventLoop();
+    }
+
     if (PlanItem$isRun(item)) {
       const test = PlanItem$Run$0(item);
       const testStart = Date.now();
@@ -238,30 +286,40 @@ export async function execute_and_finish_js(plan, seed, useColor) {
 
         if (typeof mod[fnName] === "function") {
           await mod[fnName]();
+          const duration = Date.now() - testStart;
           passed++;
-          print(outcomeChar(Outcome$Passed(), useColor));
+          const outcome = Outcome$Passed();
+          recordResult(test, outcome, duration, false);
+          reportProgress(outcome, current);
         } else {
-          const testEnd = Date.now();
+          const duration = Date.now() - testStart;
           const error = parseErrorFromTest(
             new Error(`Function ${fnName} not found in module ${modulePath}`),
           );
           failed++;
-          print(outcomeChar(Outcome$Failed(error), useColor));
-          failures.push(
-            FailedTest$FailedTest(test, error, testEnd - testStart),
-          );
+          const outcome = Outcome$Failed(error);
+          recordResult(test, outcome, duration, true);
+          reportProgress(outcome, current);
         }
       } catch (e) {
-        const testEnd = Date.now();
+        const duration = Date.now() - testStart;
         const error = parseErrorFromTest(e);
         failed++;
-        print(outcomeChar(Outcome$Failed(error), useColor));
-        failures.push(FailedTest$FailedTest(test, error, testEnd - testStart));
+        const outcome = Outcome$Failed(error);
+        recordResult(test, outcome, duration, true);
+        reportProgress(outcome, current);
       }
     } else {
+      const test = PlanItem$Skip$0(item);
       skipped++;
-      print(outcomeChar(Outcome$Skipped(), useColor));
+      const outcome = Outcome$Skipped();
+      recordResult(test, outcome, 0, false);
+      reportProgress(outcome, current);
     }
+  }
+
+  if (sp) {
+    spinnerStop(sp);
   }
 
   const endMs = Date.now();
@@ -275,8 +333,11 @@ export async function execute_and_finish_js(plan, seed, useColor) {
     endMs - startMs,
   );
 
-  const summary = renderSummary(report, useColor);
-  console.log(summary);
+  if (!isDotReporter) {
+    print(renderTable(toList(results), useColor));
+  }
+
+  console.log(renderSummary(report, useColor));
 
   if (failed > 0) {
     exit(1);

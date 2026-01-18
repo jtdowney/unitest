@@ -1,0 +1,13 @@
+---
+version: 1.5.3
+title: color mode shows symbols with ANSI codes
+file: ./test/unitest/internal/format_table_test.gleam
+test_name: with_color_mode_test
+---
++--------+--------+-----------+----------+
+| [1mStatus[22m | [1mModule[22m | [1mTest[22m      | [1mDuration[22m |
++--------+--------+-----------+----------+
+| [32m✓[39m      | foo    | pass_test | 5ms      |
+| [31m✗[39m      | foo    | fail_test | 10ms     |
+| [33mS[39m      | bar    | skip_test | -        |
++--------+--------+-----------+----------+

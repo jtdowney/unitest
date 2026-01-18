@@ -1,0 +1,14 @@
+---
+version: 1.5.3
+title: mixed results table
+file: ./test/unitest/internal/format_table_test.gleam
+test_name: mixed_results_with_color_test
+---
++--------+--------+-------------------+----------+
+| Status | Module | Test              | Duration |
++--------+--------+-------------------+----------+
+| PASS   | foo    | passing_test      | 8ms      |
+| FAIL   | foo    | failing_test      | 15ms     |
+| SKIP   | bar    | skipped_test      | -        |
+| PASS   | bar    | another_pass_test | 4ms      |
++--------+--------+-------------------+----------+

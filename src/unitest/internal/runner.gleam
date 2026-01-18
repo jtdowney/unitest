@@ -24,8 +24,8 @@ pub type Outcome {
   Skipped
 }
 
-pub type FailedTest {
-  FailedTest(item: Test, error: TestFailure, duration_ms: Int)
+pub type TestResult {
+  TestResult(item: Test, outcome: Outcome, duration_ms: Int)
 }
 
 pub type Report {
@@ -33,7 +33,7 @@ pub type Report {
     passed: Int,
     failed: Int,
     skipped: Int,
-    failures: List(FailedTest),
+    failures: List(TestResult),
     seed: Int,
     runtime_ms: Int,
   )
@@ -125,52 +125,70 @@ pub fn shuffle(items: List(a), seed_value: Int) -> List(a) {
   |> list.map(fn(triple) { triple.2 })
 }
 
+pub type Progress {
+  Progress(current: Int, total: Int)
+}
+
+pub type ExecuteResult {
+  ExecuteResult(report: Report, results: List(TestResult))
+}
+
 pub fn execute(
   plan: List(PlanItem),
   seed: Int,
   platform: Platform,
-  use_color: Bool,
-) -> Report {
+  on_result: fn(TestResult, Progress) -> Nil,
+) -> ExecuteResult {
   let start_ms = platform.now_ms()
+  let total = list.length(plan)
 
-  let #(passed, failed, skipped, failures) =
-    list.fold(plan, #(0, 0, 0, []), fn(acc, item) {
-      let #(p, f, s, fails) = acc
+  let #(passed, failed, skipped, failures, results, _idx) =
+    list.fold(plan, #(0, 0, 0, [], [], 0), fn(acc, item) {
+      let #(p, f, s, fails, res, idx) = acc
+      let progress = Progress(current: idx + 1, total: total)
       case item {
         Run(t) -> {
           let test_start = platform.now_ms()
           case platform.run_test(t) {
             Ok(Nil) -> {
-              platform.print(outcome_char(Passed, use_color))
-              #(p + 1, f, s, fails)
+              let test_end = platform.now_ms()
+              let duration = test_end - test_start
+              let result =
+                TestResult(item: t, outcome: Passed, duration_ms: duration)
+              on_result(result, progress)
+              #(p + 1, f, s, fails, [result, ..res], idx + 1)
             }
             Error(err) -> {
               let test_end = platform.now_ms()
               let duration = test_end - test_start
-              platform.print(outcome_char(Failed(err), use_color))
-              let failure =
-                FailedTest(item: t, error: err, duration_ms: duration)
-              #(p, f + 1, s, [failure, ..fails])
+              let result =
+                TestResult(item: t, outcome: Failed(err), duration_ms: duration)
+              on_result(result, progress)
+              #(p, f + 1, s, [result, ..fails], [result, ..res], idx + 1)
             }
           }
         }
-        Skip(_t) -> {
-          platform.print(outcome_char(Skipped, use_color))
-          #(p, f, s + 1, fails)
+        Skip(t) -> {
+          let result = TestResult(item: t, outcome: Skipped, duration_ms: 0)
+          on_result(result, progress)
+          #(p, f, s + 1, fails, [result, ..res], idx + 1)
         }
       }
     })
 
   let end_ms = platform.now_ms()
 
-  Report(
-    passed: passed,
-    failed: failed,
-    skipped: skipped,
-    failures: list.reverse(failures),
-    seed: seed,
-    runtime_ms: end_ms - start_ms,
-  )
+  let report =
+    Report(
+      passed: passed,
+      failed: failed,
+      skipped: skipped,
+      failures: list.reverse(failures),
+      seed: seed,
+      runtime_ms: end_ms - start_ms,
+    )
+
+  ExecuteResult(report: report, results: list.reverse(results))
 }
 
 pub fn outcome_char(outcome: Outcome, use_color: Bool) -> String {
@@ -231,14 +249,15 @@ fn format_skipped(skipped: Int, use_color: Bool) -> String {
   }
 }
 
-fn render_failures(failures: List(FailedTest), use_color: Bool) -> String {
+fn render_failures(failures: List(TestResult), use_color: Bool) -> String {
   failures
   |> list.index_map(fn(f, idx) {
-    let source = case f.error.kind {
+    let assert Failed(error) = f.outcome
+    let source = case error.kind {
       Assert(start:, end:, ..) ->
-        test_failure.extract_snippet(f.error.file, start, end)
+        test_failure.extract_snippet(error.file, start, end)
       LetAssert(start:, end:, ..) ->
-        test_failure.extract_snippet(f.error.file, start, end)
+        test_failure.extract_snippet(error.file, start, end)
       _ -> option.None
     }
 
@@ -247,7 +266,7 @@ fn render_failures(failures: List(FailedTest), use_color: Bool) -> String {
       f.item.module,
       f.item.name,
       f.duration_ms,
-      f.error,
+      error,
       source,
       use_color,
     )
