@@ -10,6 +10,8 @@ pub fn parse_empty_args_test() {
       filter: cli.Filter(location: cli.AllLocations, tag: None),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -22,6 +24,8 @@ pub fn parse_seed_test() {
       filter: cli.Filter(location: cli.AllLocations, tag: None),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -36,6 +40,8 @@ pub fn parse_test_filter_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -51,6 +57,8 @@ pub fn parse_module_filter_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -62,6 +70,8 @@ pub fn parse_tag_filter_test() {
       filter: cli.Filter(location: cli.AllLocations, tag: Some("slow")),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -77,6 +87,8 @@ pub fn test_takes_precedence_over_module_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -89,6 +101,8 @@ pub fn module_and_tag_combined_test() {
       filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: Some("slow")),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -100,6 +114,8 @@ pub fn seed_combined_with_filter_test() {
       filter: cli.Filter(location: cli.AllLocations, tag: Some("slow")),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -111,6 +127,8 @@ pub fn parse_no_color_flag_test() {
       filter: cli.Filter(location: cli.AllLocations, tag: None),
       no_color: True,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -141,6 +159,8 @@ pub fn parse_file_positional_arg_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -155,6 +175,8 @@ pub fn parse_file_with_line_positional_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -169,6 +191,8 @@ pub fn parse_file_relative_path_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -208,6 +232,8 @@ pub fn test_takes_precedence_over_positional_file_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -220,6 +246,8 @@ pub fn positional_file_takes_precedence_over_module_test() {
       filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: None),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -235,6 +263,8 @@ pub fn file_and_tag_combined_test() {
       ),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }
 
@@ -247,5 +277,7 @@ pub fn file_with_seed_test() {
       filter: cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: None),
       no_color: False,
       reporter: cli.DotReporter,
+      sort_order: None,
+      sort_reversed: False,
     ))
 }

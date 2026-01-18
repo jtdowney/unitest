@@ -1,4 +1,5 @@
 import birdie
+import unitest/internal/cli
 import unitest/internal/discover.{type Test, LineSpan, Test}
 import unitest/internal/format_table
 import unitest/internal/runner.{
@@ -46,7 +47,7 @@ pub fn all_passing_tests_with_color_test() {
     make_result(t3, Passed, 3),
   ]
 
-  format_table.render_table(results, False)
+  format_table.render_table(results, False, cli.NativeSort, False)
   |> birdie.snap("all passing tests table")
 }
 
@@ -61,7 +62,7 @@ pub fn all_failing_tests_with_color_test() {
     make_result(t3, Failed(test_failure("timeout")), 100),
   ]
 
-  format_table.render_table(results, False)
+  format_table.render_table(results, False, cli.NativeSort, False)
   |> birdie.snap("all failing tests table")
 }
 
@@ -78,7 +79,7 @@ pub fn mixed_results_with_color_test() {
     make_result(t4, Passed, 4),
   ]
 
-  format_table.render_table(results, False)
+  format_table.render_table(results, False, cli.NativeSort, False)
   |> birdie.snap("mixed results table")
 }
 
@@ -93,14 +94,14 @@ pub fn no_color_mode_test() {
     make_result(t3, Skipped, 0),
   ]
 
-  format_table.render_table(results, False)
+  format_table.render_table(results, False, cli.NativeSort, False)
   |> birdie.snap("no color mode shows PASS/FAIL/SKIP text")
 }
 
 pub fn empty_results_test() {
   let results: List(TestResult) = []
 
-  format_table.render_table(results, False)
+  format_table.render_table(results, False, cli.NativeSort, False)
   |> birdie.snap("empty results table")
 }
 
@@ -115,6 +116,83 @@ pub fn with_color_mode_test() {
     make_result(t3, Skipped, 0),
   ]
 
-  format_table.render_table(results, True)
+  format_table.render_table(results, True, cli.NativeSort, False)
   |> birdie.snap("color mode shows symbols with ANSI codes")
+}
+
+pub fn sort_by_time_descending_test() {
+  let t1 = make_test("foo", "fast_test")
+  let t2 = make_test("foo", "slow_test")
+  let t3 = make_test("bar", "medium_test")
+
+  let results = [
+    make_result(t1, Passed, 5),
+    make_result(t2, Passed, 100),
+    make_result(t3, Passed, 25),
+  ]
+
+  format_table.render_table(results, False, cli.TimeSort, False)
+  |> birdie.snap("sort by time descending shows slowest first")
+}
+
+pub fn sort_by_time_ascending_test() {
+  let t1 = make_test("foo", "fast_test")
+  let t2 = make_test("foo", "slow_test")
+  let t3 = make_test("bar", "medium_test")
+
+  let results = [
+    make_result(t1, Passed, 5),
+    make_result(t2, Passed, 100),
+    make_result(t3, Passed, 25),
+  ]
+
+  format_table.render_table(results, False, cli.TimeSort, True)
+  |> birdie.snap("sort by time reversed shows fastest first")
+}
+
+pub fn sort_by_name_ascending_test() {
+  let t1 = make_test("zebra", "z_test")
+  let t2 = make_test("alpha", "b_test")
+  let t3 = make_test("alpha", "a_test")
+
+  let results = [
+    make_result(t1, Passed, 10),
+    make_result(t2, Passed, 20),
+    make_result(t3, Passed, 30),
+  ]
+
+  format_table.render_table(results, False, cli.NameSort, False)
+  |> birdie.snap("sort by name shows alphabetical order")
+}
+
+pub fn sort_by_name_descending_test() {
+  let t1 = make_test("zebra", "z_test")
+  let t2 = make_test("alpha", "b_test")
+  let t3 = make_test("alpha", "a_test")
+
+  let results = [
+    make_result(t1, Passed, 10),
+    make_result(t2, Passed, 20),
+    make_result(t3, Passed, 30),
+  ]
+
+  format_table.render_table(results, False, cli.NameSort, True)
+  |> birdie.snap("sort by name reversed shows reverse alphabetical order")
+}
+
+pub fn native_sort_reversed_test() {
+  let t1 = make_test("first", "test_a")
+  let t2 = make_test("second", "test_b")
+  let t3 = make_test("third", "test_c")
+
+  let results = [
+    make_result(t1, Passed, 10),
+    make_result(t2, Passed, 20),
+    make_result(t3, Passed, 30),
+  ]
+
+  format_table.render_table(results, False, cli.NativeSort, True)
+  |> birdie.snap(
+    "native sort reversed shows results in reverse execution order",
+  )
 }

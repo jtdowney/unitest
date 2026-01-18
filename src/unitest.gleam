@@ -7,6 +7,7 @@
 
 import argv
 import envoy
+import gleam/bool
 import gleam/int
 import gleam/io
 import gleam/list
@@ -17,7 +18,9 @@ import gleam_community/ansi
 @target(javascript)
 import simplifile
 import spinner
-import unitest/internal/cli.{type Reporter, DotReporter, TableReporter}
+import unitest/internal/cli.{
+  type Reporter, type SortOrder, DotReporter, TableReporter,
+}
 import unitest/internal/discover.{type Test}
 import unitest/internal/format_table
 import unitest/internal/runner.{type Progress, type Report, type TestResult}
@@ -34,6 +37,8 @@ const yield_every_n_tests = 5
 /// - `ignored_tags`: Tests with any of these tags will be skipped and
 ///   reported as `S` in the output.
 /// - `test_directory`: Directory containing test files.
+/// - `sort_order`: Default sort order for table reporter output.
+/// - `sort_reversed`: Whether to reverse the sort order.
 ///
 /// ## Example
 ///
@@ -42,15 +47,29 @@ const yield_every_n_tests = 5
 ///   seed: Some(12345),
 ///   ignored_tags: ["slow", "integration"],
 ///   test_directory: "test",
+///   sort_order: cli.TimeSort,
+///   sort_reversed: False,
 /// ))
 /// ```
 pub type Options {
-  Options(seed: Option(Int), ignored_tags: List(String), test_directory: String)
+  Options(
+    seed: Option(Int),
+    ignored_tags: List(String),
+    test_directory: String,
+    sort_order: cli.SortOrder,
+    sort_reversed: Bool,
+  )
 }
 
 /// Returns default options with no seed and no ignored tags.
 pub fn default_options() -> Options {
-  Options(seed: None, ignored_tags: [], test_directory: "test")
+  Options(
+    seed: None,
+    ignored_tags: [],
+    test_directory: "test",
+    sort_order: cli.NativeSort,
+    sort_reversed: False,
+  )
 }
 
 /// Run tests with the given options.
@@ -156,7 +175,18 @@ fn run_with_args(args: List(String), options: Options) -> Nil {
 
       let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
 
-      execute_and_finish(plan, chosen_seed, use_color, cli_opts.reporter)
+      let sort_order = option.unwrap(cli_opts.sort_order, options.sort_order)
+      let sort_reversed =
+        bool.exclusive_or(cli_opts.sort_reversed, options.sort_reversed)
+
+      execute_and_finish(
+        plan,
+        chosen_seed,
+        use_color,
+        cli_opts.reporter,
+        sort_order,
+        sort_reversed,
+      )
     }
   }
 }
@@ -166,6 +196,8 @@ fn execute_and_finish(
   seed: Int,
   use_color: Bool,
   reporter: Reporter,
+  sort_order: SortOrder,
+  sort_reversed: Bool,
 ) -> Nil {
   let package_name = get_package_name()
   let platform =
@@ -175,7 +207,8 @@ fn execute_and_finish(
       print: io.print,
     )
 
-  let #(on_result, cleanup) = build_on_result_callback(reporter, use_color)
+  let #(on_result, cleanup) =
+    build_on_result_callback(reporter, use_color, sort_order, sort_reversed)
 
   let on_complete = fn(exec_result: runner.ExecuteResult) {
     cleanup(exec_result)
@@ -195,6 +228,8 @@ type CleanupCallback =
 fn build_on_result_callback(
   reporter: Reporter,
   use_color: Bool,
+  sort_order: SortOrder,
+  sort_reversed: Bool,
 ) -> #(OnResultCallback, CleanupCallback) {
   case reporter {
     DotReporter -> {
@@ -227,7 +262,12 @@ fn build_on_result_callback(
 
       let cleanup = fn(exec_result: runner.ExecuteResult) {
         spinner.stop(sp)
-        io.print(format_table.render_table(exec_result.results, use_color))
+        io.print(format_table.render_table(
+          exec_result.results,
+          use_color,
+          sort_order,
+          sort_reversed,
+        ))
       }
 
       #(on_result, cleanup)

@@ -1,13 +1,13 @@
 ---
 version: 1.5.3
-title: all passing tests table
+title: sort by name reversed shows reverse alphabetical order
 file: ./test/unitest/internal/format_table_test.gleam
-test_name: all_passing_tests_with_color_test
+test_name: sort_by_name_descending_test
 ---
 +--------+--------+--------+----------+
 | Status | Module | Test   | Duration |
 +--------+--------+--------+----------+
-| PASS   | foo    | a_test | 5ms      |
-| PASS   | foo    | b_test | 12ms     |
-| PASS   | bar    | c_test | 3ms      |
+| PASS   | zebra  | z_test | 10ms     |
+| PASS   | alpha  | b_test | 20ms     |
+| PASS   | alpha  | a_test | 30ms     |
 +--------+--------+--------+----------+

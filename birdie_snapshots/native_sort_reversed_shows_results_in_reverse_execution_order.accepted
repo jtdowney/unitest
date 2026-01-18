@@ -1,13 +1,13 @@
 ---
 version: 1.5.3
-title: all passing tests table
+title: native sort reversed shows results in reverse execution order
 file: ./test/unitest/internal/format_table_test.gleam
-test_name: all_passing_tests_with_color_test
+test_name: native_sort_reversed_test
 ---
 +--------+--------+--------+----------+
 | Status | Module | Test   | Duration |
 +--------+--------+--------+----------+
-| PASS   | foo    | a_test | 5ms      |
-| PASS   | foo    | b_test | 12ms     |
-| PASS   | bar    | c_test | 3ms      |
+| PASS   | third  | test_c | 30ms     |
+| PASS   | second | test_b | 20ms     |
+| PASS   | first  | test_a | 10ms     |
 +--------+--------+--------+----------+

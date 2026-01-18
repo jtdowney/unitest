@@ -27,6 +27,9 @@ gleam test -- test/my_mod_test.gleam:42       # Run test at line 42
 gleam test -- --test my/mod.fn_test           # Run single test by name
 gleam test -- --tag slow                      # Run tests with tag
 gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag filters
+gleam test -- --reporter table --sort time    # Table sorted by duration (slowest first)
+gleam test -- --reporter table --sort name    # Table sorted alphabetically
+gleam test -- --reporter table --sort time --sort-rev  # Fastest first
 ```
 
 ## Architecture
@@ -48,6 +51,7 @@ gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag filters
 - `rng.gleam` - deterministic PRNG + shuffle
 - `run.gleam` - orchestration: discover → select → shuffle → execute → report
 - `format_dot.gleam` - streaming `.`/`F`/`S` output + summary
+- `format_table.gleam` - table reporter with configurable sorting (native/time/name)
 - `discover.gleam` - filesystem adapter (simplifile)
 
 **Platform FFI**:
