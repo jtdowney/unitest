@@ -7,7 +7,7 @@ test_name: all_failing_tests_with_color_test
 +--------+--------+--------+----------+
 | Status | Module | Test   | Duration |
 +--------+--------+--------+----------+
-| FAIL   | bar    | c_test | 100ms    |
-| FAIL   | foo    | b_test | 25ms     |
 | FAIL   | foo    | a_test | 10ms     |
+| FAIL   | foo    | b_test | 25ms     |
+| FAIL   | bar    | c_test | 100ms    |
 +--------+--------+--------+----------+

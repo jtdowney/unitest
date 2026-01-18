@@ -47,6 +47,8 @@ fn make_cli_opts(
     filter: cli.Filter(location:, tag:),
     no_color: False,
     reporter: cli.DotReporter,
+    sort_order: None,
+    sort_reversed: False,
   )
 }
 

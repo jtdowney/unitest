@@ -54,6 +54,9 @@ Run with `gleam test`.
 gleam test                                    # Random order
 gleam test -- --seed 123                      # Reproducible order
 gleam test -- --reporter table                # Table format output
+gleam test -- --reporter table --sort time    # Table sorted by duration (slowest first)
+gleam test -- --reporter table --sort name    # Table sorted alphabetically
+gleam test -- --reporter table --sort time --sort-rev  # Table sorted fastest first
 gleam test -- test/my_mod_test.gleam          # All tests in file
 gleam test -- test/my_mod_test.gleam:42       # Test at line 42
 gleam test -- --test my_mod_test.fn           # Single test by name

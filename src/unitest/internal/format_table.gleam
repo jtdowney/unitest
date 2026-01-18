@@ -1,14 +1,21 @@
 import gleam/int
 import gleam/list
+import gleam/order
+import gleam/string
 import gleam_community/ansi
 import tobble
+import unitest/internal/cli.{type SortOrder, NameSort, NativeSort, TimeSort}
 import unitest/internal/runner.{
   type TestResult, Failed, Passed, Skipped, TestResult,
 }
 
-pub fn render_table(results: List(TestResult), use_color: Bool) -> String {
-  let sorted_results =
-    list.sort(results, fn(a, b) { int.compare(b.duration_ms, a.duration_ms) })
+pub fn render_table(
+  results: List(TestResult),
+  use_color: Bool,
+  sort_order: SortOrder,
+  sort_reversed: Bool,
+) -> String {
+  let sorted_results = sort_results(results, sort_order, sort_reversed)
 
   let builder =
     tobble.builder()
@@ -55,5 +62,29 @@ fn format_duration(outcome: runner.Outcome, duration_ms: Int) -> String {
   case outcome {
     Skipped -> "-"
     _ -> int.to_string(duration_ms) <> "ms"
+  }
+}
+
+fn sort_results(
+  results: List(TestResult),
+  sort_order: SortOrder,
+  sort_reversed: Bool,
+) -> List(TestResult) {
+  case sort_order, sort_reversed {
+    NativeSort, False -> results
+    NativeSort, True -> list.reverse(results)
+    TimeSort, False ->
+      list.sort(results, fn(a, b) { int.compare(b.duration_ms, a.duration_ms) })
+    TimeSort, True ->
+      list.sort(results, fn(a, b) { int.compare(a.duration_ms, b.duration_ms) })
+    NameSort, False -> list.sort(results, fn(a, b) { compare_by_name(a, b) })
+    NameSort, True -> list.sort(results, fn(a, b) { compare_by_name(b, a) })
+  }
+}
+
+fn compare_by_name(a: TestResult, b: TestResult) -> order.Order {
+  case string.compare(a.item.module, b.item.module) {
+    order.Eq -> string.compare(a.item.name, b.item.name)
+    other -> other
   }
 }

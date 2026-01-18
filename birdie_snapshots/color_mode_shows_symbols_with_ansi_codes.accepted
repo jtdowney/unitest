@@ -7,7 +7,7 @@ test_name: with_color_mode_test
 +--------+--------+-----------+----------+
 | [1mStatus[22m | [1mModule[22m | [1mTest[22m      | [1mDuration[22m |
 +--------+--------+-----------+----------+
-| [31m✗[39m      | foo    | fail_test | 10ms     |
 | [32m✓[39m      | foo    | pass_test | 5ms      |
+| [31m✗[39m      | foo    | fail_test | 10ms     |
 | [33mS[39m      | bar    | skip_test | -        |
 +--------+--------+-----------+----------+

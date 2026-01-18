@@ -1,13 +1,13 @@
 ---
 version: 1.5.3
-title: no color mode shows PASS/FAIL/SKIP text
+title: sort by time descending shows slowest first
 file: ./test/unitest/internal/format_table_test.gleam
-test_name: no_color_mode_test
+test_name: sort_by_time_descending_test
 ---
 +--------+--------+-------------+----------+
 | Status | Module | Test        | Duration |
 +--------+--------+-------------+----------+
-| PASS   | alpha  | first_test  | 7ms      |
-| FAIL   | alpha  | second_test | 20ms     |
-| SKIP   | beta   | third_test  | -        |
+| PASS   | foo    | slow_test   | 100ms    |
+| PASS   | bar    | medium_test | 25ms     |
+| PASS   | foo    | fast_test   | 5ms      |
 +--------+--------+-------------+----------+

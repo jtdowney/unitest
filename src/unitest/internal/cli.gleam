@@ -24,12 +24,20 @@ pub type Reporter {
   TableReporter
 }
 
+pub type SortOrder {
+  NativeSort
+  TimeSort
+  NameSort
+}
+
 pub type CliOptions {
   CliOptions(
     seed: Option(Int),
     filter: Filter,
     no_color: Bool,
     reporter: Reporter,
+    sort_order: Option(SortOrder),
+    sort_reversed: Bool,
   )
 }
 
@@ -42,6 +50,8 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       use tag_result <- clip.parameter
       use no_color <- clip.parameter
       use reporter_str <- clip.parameter
+      use sort_str <- clip.parameter
+      use sort_rev <- clip.parameter
       use file_result <- clip.parameter
 
       let seed = case seed_result {
@@ -56,6 +66,8 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
         tag_result,
         no_color,
         reporter_str,
+        sort_str,
+        sort_rev,
       )
     })
     |> clip.opt(
@@ -85,6 +97,15 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       |> opt.help("Output format: dot (default) or table")
       |> opt.default("dot"),
     )
+    |> clip.opt(
+      opt.new("sort")
+      |> opt.help("Sort order for table reporter: native, time, or name")
+      |> opt.optional,
+    )
+    |> clip.flag(
+      flag.new("sort-rev")
+      |> flag.help("Reverse the sort order (table reporter only)"),
+    )
     |> clip.arg(
       arg.new("file")
       |> arg.help(
@@ -102,6 +123,8 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       tag_result,
       no_color,
       reporter_str,
+      sort_str,
+      sort_rev,
     )
   <- result.try(
     command
@@ -116,11 +139,14 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
     tag_result,
   ))
   use reporter <- result.try(parse_reporter(reporter_str))
+  use sort_order <- result.try(parse_sort_order(sort_str))
   Ok(CliOptions(
     seed: seed,
     filter: filter,
     no_color: no_color,
     reporter: reporter,
+    sort_order: sort_order,
+    sort_reversed: sort_rev,
   ))
 }
 
@@ -129,6 +155,21 @@ fn parse_reporter(reporter_str: String) -> Result(Reporter, String) {
     "dot" -> Ok(DotReporter)
     "table" -> Ok(TableReporter)
     other -> Error("Invalid reporter: '" <> other <> "'. Use 'dot' or 'table'")
+  }
+}
+
+fn parse_sort_order(
+  sort_result: Result(String, Nil),
+) -> Result(Option(SortOrder), String) {
+  case sort_result {
+    Error(Nil) -> Ok(None)
+    Ok("native") -> Ok(Some(NativeSort))
+    Ok("time") -> Ok(Some(TimeSort))
+    Ok("name") -> Ok(Some(NameSort))
+    Ok(other) ->
+      Error(
+        "Invalid sort order: '" <> other <> "'. Use 'native', 'time', or 'name'",
+      )
   }
 }
 

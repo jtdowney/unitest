@@ -7,8 +7,8 @@ test_name: mixed_results_with_color_test
 +--------+--------+-------------------+----------+
 | Status | Module | Test              | Duration |
 +--------+--------+-------------------+----------+
-| FAIL   | foo    | failing_test      | 15ms     |
 | PASS   | foo    | passing_test      | 8ms      |
-| PASS   | bar    | another_pass_test | 4ms      |
+| FAIL   | foo    | failing_test      | 15ms     |
 | SKIP   | bar    | skipped_test      | -        |
+| PASS   | bar    | another_pass_test | 4ms      |
 +--------+--------+-------------------+----------+
