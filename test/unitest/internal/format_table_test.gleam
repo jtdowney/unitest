@@ -196,3 +196,37 @@ pub fn native_sort_reversed_test() {
     "native sort reversed shows results in reverse execution order",
   )
 }
+
+pub fn sort_by_time_skipped_after_zero_ms_descending_test() {
+  let t1 = make_test("foo", "zero_ms_test")
+  let t2 = make_test("foo", "skipped_test")
+  let t3 = make_test("bar", "slow_test")
+  let t4 = make_test("bar", "medium_test")
+
+  let results = [
+    make_result(t1, Passed, 0),
+    make_result(t2, Skipped, 0),
+    make_result(t3, Passed, 100),
+    make_result(t4, Passed, 25),
+  ]
+
+  format_table.render_table(results, False, cli.TimeSort, False)
+  |> birdie.snap("sort by time descending puts skipped after 0ms tests")
+}
+
+pub fn sort_by_time_skipped_after_zero_ms_ascending_test() {
+  let t1 = make_test("foo", "zero_ms_test")
+  let t2 = make_test("foo", "skipped_test")
+  let t3 = make_test("bar", "slow_test")
+  let t4 = make_test("bar", "medium_test")
+
+  let results = [
+    make_result(t1, Passed, 0),
+    make_result(t2, Skipped, 0),
+    make_result(t3, Passed, 100),
+    make_result(t4, Passed, 25),
+  ]
+
+  format_table.render_table(results, False, cli.TimeSort, True)
+  |> birdie.snap("sort by time ascending puts skipped after 0ms tests")
+}
