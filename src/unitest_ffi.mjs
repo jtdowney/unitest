@@ -1,5 +1,20 @@
 import { inspect as stringInspect } from "../gleam_stdlib/gleam/string.mjs";
-import { toList } from "./gleam.mjs";
+import { Result$Error, Result$Ok, toList } from "./gleam.mjs";
+import {
+  AssertedExpr$AssertedExpr,
+  AssertKind$BinaryOperator,
+  AssertKind$FunctionCall,
+  AssertKind$OtherExpression,
+  ExprKind$Expression,
+  ExprKind$Literal,
+  ExprKind$Unevaluated,
+  PanicKind$Assert,
+  PanicKind$Generic,
+  PanicKind$LetAssert,
+  PanicKind$Panic,
+  PanicKind$Todo,
+  TestFailure$TestFailure,
+} from "./unitest/internal/test_failure.mjs";
 
 const runtime =
   typeof Deno !== "undefined"
@@ -8,51 +23,60 @@ const runtime =
       ? "node"
       : null;
 
-import {
-  outcome_char as outcomeChar,
-  render_summary as renderSummary,
-  Outcome$Failed,
-  Outcome$Passed,
-  Outcome$Skipped,
-  PlanItem$Run$0,
-  PlanItem$isRun,
-  PlanItem$Skip$0,
-  Report$Report,
-  ExecuteResult$ExecuteResult,
-  TestResult$TestResult,
-} from "./unitest/internal/runner.mjs";
-import { Reporter$isDotReporter } from "./unitest/internal/cli.mjs";
-import { render_table as renderTable } from "./unitest/internal/format_table.mjs";
-import {
-  new$ as spinnerNew,
-  start as spinnerStart,
-  stop as spinnerStop,
-  set_text as spinnerSetText,
-  with_colour as spinnerWithColour,
-} from "../spinner/spinner.mjs";
-import { cyan as ansiCyan } from "../gleam_community_ansi/gleam_community/ansi.mjs";
-import {
-  TestFailure$TestFailure,
-  PanicKind$Assert,
-  PanicKind$Panic,
-  PanicKind$Todo,
-  PanicKind$LetAssert,
-  PanicKind$Generic,
-  AssertKind$BinaryOperator,
-  AssertKind$FunctionCall,
-  AssertKind$OtherExpression,
-  AssertedExpr$AssertedExpr,
-  ExprKind$Literal,
-  ExprKind$Expression,
-  ExprKind$Unevaluated,
-} from "./unitest/internal/test_failure.mjs";
-
 export function autoSeed() {
   return Date.now() % 1000000;
 }
 
+export function nowMs() {
+  return Date.now();
+}
+
+export function halt(code) {
+  if (runtime === "node") {
+    process.exitCode = code;
+  } else if (runtime === "deno") {
+    Deno.exitCode = code;
+  }
+}
+
+export function yieldThen(next) {
+  if (typeof setImmediate !== "undefined") {
+    setImmediate(() => next());
+  } else {
+    setTimeout(() => next(), 0);
+  }
+}
+
+async function runTest(test, packageName) {
+  try {
+    const modulePath = test.module;
+    const path = `../${packageName}/${modulePath}.mjs`;
+    const mod = await import(path);
+    const fnName = test.name;
+
+    if (typeof mod[fnName] === "function") {
+      await mod[fnName]();
+      return Result$Ok(undefined);
+    } else {
+      const error = parseErrorFromTest(
+        new Error(`Function ${fnName} not found in module ${modulePath}`),
+      );
+      return Result$Error(error);
+    }
+  } catch (e) {
+    const error = parseErrorFromTest(e);
+    return Result$Error(error);
+  }
+}
+
+export function runTestAsync(test, packageName, next) {
+  runTest(test, packageName).then((result) => {
+    next(result);
+  });
+}
+
 function parseErrorFromTest(error) {
-  if (error instanceof Error && error.gleam_error) {
+  if (error instanceof globalThis.Error && error.gleam_error) {
     const message = error.message || "Unknown error";
     const file = error.file || "";
     const module = error.module || "";
@@ -96,13 +120,11 @@ function parseErrorFromTest(error) {
 function formatGenericError(error) {
   const errorMessage = error.message || String(error);
 
-  // Module not found errors
   if (
     errorMessage.includes("Cannot find module") ||
     errorMessage.includes("Module not found") ||
     errorMessage.includes("does not provide an export")
   ) {
-    // Extract module name from error message if possible
     const moduleMatch = errorMessage.match(
       /Cannot find module ['"]([^'"]+)['"]/,
     );
@@ -118,7 +140,6 @@ function formatGenericError(error) {
     return errorMessage;
   }
 
-  // TypeError for calling undefined as function
   if (error instanceof TypeError) {
     const undefMatch = errorMessage.match(/(\w+) is not a function/);
     if (undefMatch) {
@@ -126,7 +147,6 @@ function formatGenericError(error) {
     }
   }
 
-  // ReferenceError for undefined variables
   if (error instanceof ReferenceError) {
     const refMatch = errorMessage.match(/(\w+) is not defined/);
     if (refMatch) {
@@ -179,167 +199,4 @@ function buildAssertedExpr(expr) {
   }
 
   return AssertedExpr$AssertedExpr(start, end, kind);
-}
-
-function exit(code) {
-  if (runtime === "node") {
-    process.exit(code);
-  } else if (runtime === "deno") {
-    Deno.exit(code);
-  }
-}
-
-let cachedPackageName = null;
-
-async function getPackageName() {
-  if (cachedPackageName) {
-    return cachedPackageName;
-  }
-
-  try {
-    let content;
-    if (runtime === "deno") {
-      content = await Deno.readTextFile("gleam.toml");
-    } else if (runtime === "node") {
-      const fs = await import("node:fs/promises");
-      content = await fs.readFile("gleam.toml", "utf-8");
-    } else {
-      throw new Error("Unsupported JavaScript runtime");
-    }
-
-    const match = content.match(/^name\s*=\s*"([^"]+)"/m);
-    if (match) {
-      cachedPackageName = match[1];
-      return cachedPackageName;
-    }
-    throw new Error("Could not find package name in gleam.toml");
-  } catch (e) {
-    throw new Error(`Failed to read package name: ${e.message}`);
-  }
-}
-
-function print(s) {
-  if (runtime === "node") {
-    process.stdout.write(s);
-  } else if (runtime === "deno") {
-    Deno.stdout.writeSync(new TextEncoder().encode(s));
-  }
-}
-
-export async function execute_and_finish_js(plan, seed, useColor, reporter) {
-  const startMs = Date.now();
-  const packageName = await getPackageName();
-  const isDotReporter = Reporter$isDotReporter(reporter);
-
-  let passed = 0;
-  let failed = 0;
-  let skipped = 0;
-  const failures = [];
-  const results = [];
-
-  const planArray = plan.toArray();
-  const total = planArray.length;
-
-  const sp = isDotReporter
-    ? null
-    : spinnerStart(spinnerWithColour(spinnerNew("Running tests..."), ansiCyan));
-
-  function reportProgress(outcome, current) {
-    if (isDotReporter) {
-      print(outcomeChar(outcome, useColor));
-    } else {
-      spinnerSetText(sp, `Running tests... ${current}/${total}`);
-    }
-  }
-
-  function recordResult(test, outcome, duration, isFailure) {
-    const result = TestResult$TestResult(test, outcome, duration);
-    results.push(result);
-    if (isFailure) {
-      failures.push(result);
-    }
-  }
-
-  const yieldToEventLoop = () =>
-    new Promise((r) =>
-      typeof setImmediate !== "undefined" ? setImmediate(r) : setTimeout(r, 0),
-    );
-
-  let current = 0;
-  for (const item of planArray) {
-    current++;
-
-    // Yield periodically to allow spinner's setInterval to fire
-    if (!isDotReporter && current % 5 === 0) {
-      await yieldToEventLoop();
-    }
-
-    if (PlanItem$isRun(item)) {
-      const test = PlanItem$Run$0(item);
-      const testStart = Date.now();
-
-      try {
-        const modulePath = test.module;
-        const path = `../${packageName}/${modulePath}.mjs`;
-        const mod = await import(path);
-        const fnName = test.name;
-
-        if (typeof mod[fnName] === "function") {
-          await mod[fnName]();
-          const duration = Date.now() - testStart;
-          passed++;
-          const outcome = Outcome$Passed();
-          recordResult(test, outcome, duration, false);
-          reportProgress(outcome, current);
-        } else {
-          const duration = Date.now() - testStart;
-          const error = parseErrorFromTest(
-            new Error(`Function ${fnName} not found in module ${modulePath}`),
-          );
-          failed++;
-          const outcome = Outcome$Failed(error);
-          recordResult(test, outcome, duration, true);
-          reportProgress(outcome, current);
-        }
-      } catch (e) {
-        const duration = Date.now() - testStart;
-        const error = parseErrorFromTest(e);
-        failed++;
-        const outcome = Outcome$Failed(error);
-        recordResult(test, outcome, duration, true);
-        reportProgress(outcome, current);
-      }
-    } else {
-      const test = PlanItem$Skip$0(item);
-      skipped++;
-      const outcome = Outcome$Skipped();
-      recordResult(test, outcome, 0, false);
-      reportProgress(outcome, current);
-    }
-  }
-
-  if (sp) {
-    spinnerStop(sp);
-  }
-
-  const endMs = Date.now();
-
-  const report = Report$Report(
-    passed,
-    failed,
-    skipped,
-    toList(failures),
-    seed,
-    endMs - startMs,
-  );
-
-  if (!isDotReporter) {
-    print(renderTable(toList(results), useColor));
-  }
-
-  console.log(renderSummary(report, useColor));
-
-  if (failed > 0) {
-    exit(1);
-  }
 }

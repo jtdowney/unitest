@@ -14,12 +14,16 @@ import gleam/option.{type Option, None}
 import gleam/order
 import gleam/string
 import gleam_community/ansi
+@target(javascript)
+import simplifile
 import spinner
 import unitest/internal/cli.{type Reporter, DotReporter, TableReporter}
 import unitest/internal/discover.{type Test}
 import unitest/internal/format_table
 import unitest/internal/runner.{type Progress, type Report, type TestResult}
 import unitest/internal/test_failure.{type TestFailure}
+
+const yield_every_n_tests = 5
 
 /// Configuration options for the test runner.
 ///
@@ -157,22 +161,49 @@ fn run_with_args(args: List(String), options: Options) -> Nil {
   }
 }
 
-@external(javascript, "./unitest_ffi.mjs", "execute_and_finish_js")
 fn execute_and_finish(
   plan: List(runner.PlanItem),
   seed: Int,
   use_color: Bool,
   reporter: Reporter,
 ) -> Nil {
+  let package_name = get_package_name()
   let platform =
-    runner.Platform(now_ms: now_ms_ffi, run_test: run_test_ffi, print: io.print)
+    runner.Platform(
+      now_ms: now_ms_ffi,
+      run_test: fn(t, k) { run_test_ffi(t, package_name, k) },
+      print: io.print,
+    )
 
-  let exec_result = case reporter {
+  let #(on_result, cleanup) = build_on_result_callback(reporter, use_color)
+
+  let on_complete = fn(exec_result: runner.ExecuteResult) {
+    cleanup(exec_result)
+    io.println(runner.render_summary(exec_result.report, use_color))
+    halt(exit_code(exec_result.report))
+  }
+
+  runner.execute(plan, seed, platform, on_result, on_complete)
+}
+
+type OnResultCallback =
+  fn(TestResult, Progress, fn() -> Nil) -> Nil
+
+type CleanupCallback =
+  fn(runner.ExecuteResult) -> Nil
+
+fn build_on_result_callback(
+  reporter: Reporter,
+  use_color: Bool,
+) -> #(OnResultCallback, CleanupCallback) {
+  case reporter {
     DotReporter -> {
-      let on_result = fn(result: TestResult, _progress: Progress) {
+      let on_result = fn(result: TestResult, _progress: Progress, continue) {
         io.print(runner.outcome_char(result.outcome, use_color))
+        continue()
       }
-      runner.execute(plan, seed, platform, on_result)
+      let cleanup = fn(_: runner.ExecuteResult) { Nil }
+      #(on_result, cleanup)
     }
     TableReporter -> {
       let sp =
@@ -180,28 +211,28 @@ fn execute_and_finish(
         |> spinner.with_colour(ansi.cyan)
         |> spinner.start
 
-      let on_result = fn(_result: TestResult, progress: Progress) {
+      let on_result = fn(_result: TestResult, progress: Progress, continue) {
         let text =
           "Running tests... "
           <> int.to_string(progress.current)
           <> "/"
           <> int.to_string(progress.total)
         spinner.set_text(sp, text)
+
+        case progress.current % yield_every_n_tests == 0 {
+          True -> yield_then_ffi(continue)
+          False -> continue()
+        }
       }
 
-      let result = runner.execute(plan, seed, platform, on_result)
-      spinner.stop(sp)
+      let cleanup = fn(exec_result: runner.ExecuteResult) {
+        spinner.stop(sp)
+        io.print(format_table.render_table(exec_result.results, use_color))
+      }
 
-      io.print(format_table.render_table(result.results, use_color))
-      result
+      #(on_result, cleanup)
     }
   }
-
-  io.println(runner.render_summary(exec_result.report, use_color))
-
-  exec_result.report
-  |> exit_code
-  |> halt
 }
 
 @internal
@@ -221,14 +252,71 @@ fn should_use_color(cli_no_color: Bool) -> Bool {
 }
 
 @external(erlang, "unitest_ffi", "now_ms")
+@external(javascript, "./unitest_ffi.mjs", "nowMs")
 fn now_ms_ffi() -> Int
 
-@external(erlang, "unitest_ffi", "run_test")
-fn run_test_ffi(t: Test) -> Result(Nil, TestFailure)
+@external(erlang, "unitest_ffi", "run_test_async")
+@external(javascript, "./unitest_ffi.mjs", "runTestAsync")
+fn run_test_ffi(
+  t: Test,
+  package_name: String,
+  k: fn(Result(Nil, TestFailure)) -> Nil,
+) -> Nil
+
+@target(erlang)
+fn yield_then_ffi(next: fn() -> Nil) -> Nil {
+  next()
+}
+
+@target(javascript)
+@external(javascript, "./unitest_ffi.mjs", "yieldThen")
+fn yield_then_ffi(next: fn() -> Nil) -> Nil
 
 @external(erlang, "erlang", "halt")
+@external(javascript, "./unitest_ffi.mjs", "halt")
 fn halt(code: Int) -> Nil
 
 @external(erlang, "unitest_ffi", "auto_seed")
 @external(javascript, "./unitest_ffi.mjs", "autoSeed")
 fn auto_seed() -> Int
+
+@target(erlang)
+fn get_package_name() -> String {
+  ""
+}
+
+@target(javascript)
+fn get_package_name() -> String {
+  case simplifile.read("gleam.toml") {
+    Ok(content) ->
+      case parse_package_name(content) {
+        Ok(name) -> name
+        Error(Nil) -> {
+          io.println_error("Error: Could not find 'name' in gleam.toml")
+          halt(1)
+          ""
+        }
+      }
+    Error(_) -> {
+      io.println_error("Error: Could not read gleam.toml")
+      halt(1)
+      ""
+    }
+  }
+}
+
+pub fn parse_package_name(content: String) -> Result(String, Nil) {
+  content
+  |> string.split("\n")
+  |> list.find_map(fn(line) {
+    let trimmed = string.trim_start(line)
+    case string.starts_with(trimmed, "name") {
+      False -> Error(Nil)
+      True ->
+        case string.split(trimmed, "\"") {
+          [_, name, ..] -> Ok(name)
+          _ -> Error(Nil)
+        }
+    }
+  })
+}

@@ -43,3 +43,32 @@ pub fn exit_code_one_when_multiple_failures_test() {
     )
   assert unitest.exit_code(report) == 1
 }
+
+pub fn parse_package_name_extracts_name_test() {
+  let content = "name = \"unitest\"\nversion = \"1.0.0\""
+  assert unitest.parse_package_name(content) == Ok("unitest")
+}
+
+pub fn parse_package_name_with_leading_whitespace_test() {
+  let content = "  name = \"mypackage\"\n"
+  assert unitest.parse_package_name(content) == Ok("mypackage")
+}
+
+pub fn parse_package_name_finds_first_name_line_test() {
+  let content = "description = \"test\"\nname = \"found\"\nother = \"stuff\""
+  assert unitest.parse_package_name(content) == Ok("found")
+}
+
+pub fn parse_package_name_missing_name_returns_error_test() {
+  let content = "version = \"1.0.0\"\ndescription = \"no name here\""
+  assert unitest.parse_package_name(content) == Error(Nil)
+}
+
+pub fn parse_package_name_malformed_line_returns_error_test() {
+  let content = "name = noquotes"
+  assert unitest.parse_package_name(content) == Error(Nil)
+}
+
+pub fn parse_package_name_empty_content_returns_error_test() {
+  assert unitest.parse_package_name("") == Error(Nil)
+}
