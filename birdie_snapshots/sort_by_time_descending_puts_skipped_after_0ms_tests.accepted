@@ -1,0 +1,14 @@
+---
+version: 1.5.3
+title: sort by time descending puts skipped after 0ms tests
+file: ./test/unitest/internal/format_table_test.gleam
+test_name: sort_by_time_skipped_after_zero_ms_descending_test
+---
++--------+--------+--------------+----------+
+| Status | Module | Test         | Duration |
++--------+--------+--------------+----------+
+| PASS   | bar    | slow_test    | 100ms    |
+| PASS   | bar    | medium_test  | 25ms     |
+| PASS   | foo    | zero_ms_test | 0ms      |
+| SKIP   | foo    | skipped_test | -        |
++--------+--------+--------------+----------+

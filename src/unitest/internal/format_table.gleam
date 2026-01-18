@@ -73,10 +73,8 @@ fn sort_results(
   case sort_order, sort_reversed {
     NativeSort, False -> results
     NativeSort, True -> list.reverse(results)
-    TimeSort, False ->
-      list.sort(results, fn(a, b) { int.compare(b.duration_ms, a.duration_ms) })
-    TimeSort, True ->
-      list.sort(results, fn(a, b) { int.compare(a.duration_ms, b.duration_ms) })
+    TimeSort, reversed ->
+      list.sort(results, fn(a, b) { compare_by_time(a, b, reversed) })
     NameSort, False -> list.sort(results, fn(a, b) { compare_by_name(a, b) })
     NameSort, True -> list.sort(results, fn(a, b) { compare_by_name(b, a) })
   }
@@ -86,5 +84,20 @@ fn compare_by_name(a: TestResult, b: TestResult) -> order.Order {
   case string.compare(a.item.module, b.item.module) {
     order.Eq -> string.compare(a.item.name, b.item.name)
     other -> other
+  }
+}
+
+fn compare_by_time(a: TestResult, b: TestResult, reversed: Bool) -> order.Order {
+  case a.outcome, b.outcome {
+    // Both skipped - equal
+    Skipped, Skipped -> order.Eq
+    // Skipped always comes last
+    Skipped, _ -> order.Gt
+    _, Skipped -> order.Lt
+    _, _ ->
+      case reversed {
+        False -> int.compare(b.duration_ms, a.duration_ms)
+        True -> int.compare(a.duration_ms, b.duration_ms)
+      }
   }
 }
