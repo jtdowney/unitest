@@ -7,7 +7,7 @@ test_name: no_color_mode_test
 +--------+--------+-------------+----------+
 | Status | Module | Test        | Duration |
 +--------+--------+-------------+----------+
-| PASS   | alpha  | first_test  | 7ms      |
 | FAIL   | alpha  | second_test | 20ms     |
+| PASS   | alpha  | first_test  | 7ms      |
 | SKIP   | beta   | third_test  | -        |
 +--------+--------+-------------+----------+
