@@ -40,7 +40,7 @@ Run with `gleam test`.
 - **Random test ordering** with reproducible seeds
 - **Test tagging** for categorization and filtering
 - **CLI filtering** by file path, line number, test name, or tag
-- **Streaming output**: `.` pass, `F` fail, `S` skip
+- **Flexible output**: streaming dots (default) or table format
 
 ## Future Work?
 
@@ -53,6 +53,7 @@ Run with `gleam test`.
 ```bash
 gleam test                                    # Random order
 gleam test -- --seed 123                      # Reproducible order
+gleam test -- --reporter table                # Table format output
 gleam test -- test/my_mod_test.gleam          # All tests in file
 gleam test -- test/my_mod_test.gleam:42       # Test at line 42
 gleam test -- --test my_mod_test.fn           # Single test by name
