@@ -1,6 +1,6 @@
 -module(unitest_ffi).
 
--export([run_test/1, auto_seed/0, now_ms/0]).
+-export([run_test/1, run_test_async/3, auto_seed/0, now_ms/0]).
 
 -include_lib("unitest/include/unitest@internal@test_failure_TestFailure.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Assert.hrl").
@@ -47,6 +47,10 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
         exit:Reason:Stack ->
             {error, parse_gleam_error(Reason, Stack)}
     end.
+
+run_test_async(Test, _PackageName, Continuation) ->
+    Result = run_test(Test),
+    Continuation(Result).
 
 %% Parse Gleam error maps into GleamPanic records
 parse_gleam_error(Reason, _Stack) when is_map(Reason) ->
@@ -111,14 +115,17 @@ build_simple_panic(Map, Kind) ->
 
 %% Build panic for undefined function errors
 build_undef_panic([{M, F, A, _Info} | _Rest]) ->
-    Arity = case A of
-        Args when is_list(Args) -> length(Args);
-        N when is_integer(N) -> N
-    end,
-    Message = iolist_to_binary(io_lib:format(
-        "Undefined function: ~s:~s/~B",
-        [M, F, Arity]
-    )),
+    Arity =
+        case A of
+            Args when is_list(Args) -> length(Args);
+            N when is_integer(N) -> N
+        end,
+    Message = iolist_to_binary(
+        io_lib:format(
+            "Undefined function: ~s:~s/~B",
+            [M, F, Arity]
+        )
+    ),
     #test_failure{
         message = Message,
         file = <<>>,
@@ -141,10 +148,11 @@ build_undef_panic(_) ->
 build_generic_panic(Reason, Stack) ->
     StackInfo = format_stack_summary(Stack),
     BaseMessage = iolist_to_binary(io_lib:format("~p", [Reason])),
-    Message = case StackInfo of
-        <<>> -> BaseMessage;
-        _ -> <<BaseMessage/binary, "\n", StackInfo/binary>>
-    end,
+    Message =
+        case StackInfo of
+            <<>> -> BaseMessage;
+            _ -> <<BaseMessage/binary, "\n", StackInfo/binary>>
+        end,
     #test_failure{
         message = Message,
         file = <<>>,
@@ -156,10 +164,11 @@ build_generic_panic(Reason, Stack) ->
 
 %% Format a brief stack summary (first meaningful frame)
 format_stack_summary([{M, F, A, Info} | _]) ->
-    Arity = case A of
-        Args when is_list(Args) -> length(Args);
-        N when is_integer(N) -> N
-    end,
+    Arity =
+        case A of
+            Args when is_list(Args) -> length(Args);
+            N when is_integer(N) -> N
+        end,
     case proplists:get_value(file, Info) of
         undefined ->
             iolist_to_binary(io_lib:format("  in ~s:~s/~B", [M, F, Arity]));
