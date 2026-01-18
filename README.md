@@ -42,6 +42,10 @@ Run with `gleam test`.
 - **CLI filtering** by file path, line number, test name, or tag
 - **Flexible output**: streaming dots (default) or table format
 
+## Why you may not want to use unitest
+
+- It pulls in a lot of extra dependencies to offer the features above.
+
 ## Future Work?
 
 - Parallel execution
