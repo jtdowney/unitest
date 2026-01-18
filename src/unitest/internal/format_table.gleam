@@ -7,6 +7,9 @@ import unitest/internal/runner.{
 }
 
 pub fn render_table(results: List(TestResult), use_color: Bool) -> String {
+  let sorted_results =
+    list.sort(results, fn(a, b) { int.compare(b.duration_ms, a.duration_ms) })
+
   let builder =
     tobble.builder()
     |> tobble.add_row([
@@ -17,7 +20,7 @@ pub fn render_table(results: List(TestResult), use_color: Bool) -> String {
     ])
 
   let builder =
-    list.fold(results, builder, fn(b, result) {
+    list.fold(sorted_results, builder, fn(b, result) {
       let TestResult(item: t, outcome:, duration_ms:) = result
       let status = format_status(outcome, use_color)
       let duration = format_duration(outcome, duration_ms)
