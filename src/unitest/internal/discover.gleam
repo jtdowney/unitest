@@ -1,6 +1,6 @@
 import glance.{
-  type Expression, type Function, type Span, type Statement, Call,
-  Expression as ExprStatement, FieldAccess, List as ListExpr, Public,
+  type Attribute, type Expression, type Function, type Span, type Statement,
+  Call, Expression as ExprStatement, FieldAccess, List as ListExpr, Public,
   String as StringExpr, UnlabelledField, Use, Variable,
 }
 import gleam/bit_array
@@ -83,19 +83,56 @@ fn discover_tests_in_file(path: String, base_path: String) -> List(Test) {
 }
 
 pub fn parse_module(source: String) -> Result(List(ParsedTest), glance.Error) {
+  parse_module_for_target(source, current_target())
+}
+
+pub fn parse_module_for_target(
+  source: String,
+  target: String,
+) -> Result(List(ParsedTest), glance.Error) {
   use module <- result.try(glance.module(source))
 
   let tests =
     module.functions
     |> list.filter_map(fn(def) {
       let func = def.definition
-      case func.publicity, string.ends_with(func.name, "_test") {
-        Public, True -> Ok(parse_function(func))
-        _, _ -> Error(Nil)
+      case
+        func.publicity,
+        string.ends_with(func.name, "_test"),
+        is_available_for_target(def.attributes, target)
+      {
+        Public, True, True -> Ok(parse_function(func))
+        _, _, _ -> Error(Nil)
       }
     })
 
   Ok(tests)
+}
+
+fn is_available_for_target(attributes: List(Attribute), target: String) -> Bool {
+  let target_attrs = list.filter(attributes, fn(attr) { attr.name == "target" })
+
+  case target_attrs {
+    [] -> True
+    attrs -> list.any(attrs, fn(attr) { matches_target(attr, target) })
+  }
+}
+
+fn matches_target(attr: Attribute, target: String) -> Bool {
+  case attr.arguments {
+    [Variable(name: attr_target, ..)] -> attr_target == target
+    _ -> True
+  }
+}
+
+@target(erlang)
+fn current_target() -> String {
+  "erlang"
+}
+
+@target(javascript)
+fn current_target() -> String {
+  "javascript"
 }
 
 fn parse_function(func: Function) -> ParsedTest {
