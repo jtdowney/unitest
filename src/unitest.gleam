@@ -173,9 +173,9 @@ fn execute_and_finish(
 
 @internal
 pub fn exit_code(report: Report) -> Int {
-  case report.failed {
-    0 -> 0
-    _ -> 1
+  case report.failed > 0 {
+    True -> 1
+    False -> 0
   }
 }
 
