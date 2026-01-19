@@ -13,9 +13,9 @@ import gleam/io
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/order
+import gleam/result
 import gleam/string
 import gleam_community/ansi
-@target(javascript)
 import simplifile
 import spinner
 import unitest/internal/cli.{
@@ -320,25 +320,20 @@ fn halt(code: Int) -> Nil
 @external(javascript, "./unitest_ffi.mjs", "autoSeed")
 fn auto_seed() -> Int
 
-@target(erlang)
 fn get_package_name() -> String {
-  ""
-}
+  let name_result = {
+    use content <- result.try(
+      simplifile.read("gleam.toml")
+      |> result.replace_error("Error: Could not read gleam.toml"),
+    )
+    parse_package_name(content)
+    |> result.replace_error("Error: Could not find 'name' in gleam.toml")
+  }
 
-@target(javascript)
-fn get_package_name() -> String {
-  case simplifile.read("gleam.toml") {
-    Ok(content) ->
-      case parse_package_name(content) {
-        Ok(name) -> name
-        Error(Nil) -> {
-          io.println_error("Error: Could not find 'name' in gleam.toml")
-          halt(1)
-          ""
-        }
-      }
-    Error(_) -> {
-      io.println_error("Error: Could not read gleam.toml")
+  case name_result {
+    Ok(name) -> name
+    Error(error) -> {
+      io.println_error("Error: " <> error)
       halt(1)
       ""
     }
