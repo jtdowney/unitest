@@ -81,10 +81,8 @@ fn sort_results(
 }
 
 fn compare_by_name(a: TestResult, b: TestResult) -> order.Order {
-  case string.compare(a.item.module, b.item.module) {
-    order.Eq -> string.compare(a.item.name, b.item.name)
-    other -> other
-  }
+  string.compare(a.item.module, b.item.module)
+  |> order.lazy_break_tie(fn() { string.compare(a.item.name, b.item.name) })
 }
 
 fn compare_by_time(a: TestResult, b: TestResult, reversed: Bool) -> order.Order {
