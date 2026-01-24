@@ -36,9 +36,19 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
     ModuleConverted = binary:replace(ModuleBin, <<"/">>, <<"@">>, [global]),
     Module = erlang:binary_to_atom(ModuleConverted, utf8),
     Name = erlang:binary_to_atom(NameBin, utf8),
-    try
-        Module:Name(),
-        {ok, nil}
+    try Module:Name() of
+        {error, Reason} ->
+            Message = iolist_to_binary([<<"Test returned Error: ">>, gleam@string:inspect(Reason)]),
+            {error, #test_failure{
+                message = Message,
+                file = <<>>,
+                module = <<>>,
+                function = <<>>,
+                line = 0,
+                kind = generic
+            }};
+        _ ->
+            {ok, nil}
     catch
         error:Reason:Stack ->
             {error, parse_gleam_error(Reason, Stack)};
@@ -117,15 +127,12 @@ build_simple_panic(Map, Kind) ->
 build_undef_panic([{M, F, A, _Info} | _Rest]) ->
     Arity =
         case A of
-            Args when is_list(Args) -> length(Args);
-            N when is_integer(N) -> N
+            Args when is_list(Args) ->
+                length(Args);
+            N when is_integer(N) ->
+                N
         end,
-    Message = iolist_to_binary(
-        io_lib:format(
-            "Undefined function: ~s:~s/~B",
-            [M, F, Arity]
-        )
-    ),
+    Message = iolist_to_binary(io_lib:format("Undefined function: ~s:~s/~B", [M, F, Arity])),
     #test_failure{
         message = Message,
         file = <<>>,
@@ -150,8 +157,10 @@ build_generic_panic(Reason, Stack) ->
     BaseMessage = iolist_to_binary(io_lib:format("~p", [Reason])),
     Message =
         case StackInfo of
-            <<>> -> BaseMessage;
-            _ -> <<BaseMessage/binary, "\n", StackInfo/binary>>
+            <<>> ->
+                BaseMessage;
+            _ ->
+                <<BaseMessage/binary, "\n", StackInfo/binary>>
         end,
     #test_failure{
         message = Message,
@@ -166,8 +175,10 @@ build_generic_panic(Reason, Stack) ->
 format_stack_summary([{M, F, A, Info} | _]) ->
     Arity =
         case A of
-            Args when is_list(Args) -> length(Args);
-            N when is_integer(N) -> N
+            Args when is_list(Args) ->
+                length(Args);
+            N when is_integer(N) ->
+                N
         end,
     case proplists:get_value(file, Info) of
         undefined ->

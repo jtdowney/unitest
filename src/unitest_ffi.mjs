@@ -1,5 +1,5 @@
 import { inspect as stringInspect } from "../gleam_stdlib/gleam/string.mjs";
-import { Result$Error, Result$Ok, toList } from "./gleam.mjs";
+import { Result$Error, Result$Ok, Result$isError, toList } from "./gleam.mjs";
 import {
   AssertedExpr$AssertedExpr,
   AssertKind$BinaryOperator,
@@ -55,7 +55,21 @@ async function runTest(test, packageName) {
     const fnName = test.name;
 
     if (typeof mod[fnName] === "function") {
-      await mod[fnName]();
+      const result = await mod[fnName]();
+      if (Result$isError(result)) {
+        const reason = result[0];
+        const message = "Test returned Error: " + stringInspect(reason);
+        const error = TestFailure$TestFailure(
+          message,
+          "",
+          "",
+          "",
+          0,
+          PanicKind$Generic(),
+        );
+        return Result$Error(error);
+      }
+
       return Result$Ok(undefined);
     } else {
       const error = parseErrorFromTest(
