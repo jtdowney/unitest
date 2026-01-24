@@ -88,6 +88,21 @@ pub fn integration_db_test() {
 }
 ```
 
+## Error Results
+
+Tests can return `Result(a, e)` instead of `Nil`. Returning `Error(reason)` is treated as a test failure:
+
+```gleam
+pub fn validation_test() -> Result(Nil, String) {
+  case validate_config() {
+    Ok(_) -> Ok(Nil)
+    Error(msg) -> Error(msg)
+  }
+}
+```
+
+This is useful for tests that naturally work with `Result` types, avoiding the need for `let assert Ok(_) = ...` patterns.
+
 ## Ignoring Tags by Default
 
 Skip certain tags unless explicitly requested:

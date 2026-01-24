@@ -109,3 +109,10 @@ pub fn failure_demo_undefined_function_test() {
   use <- unitest.tag("failure_demo")
   demo.call_undefined()
 }
+
+/// Demo: Returning Error Result
+/// Shows how error results are displayed
+pub fn failure_demo_error_result_test() -> Result(Nil, String) {
+  use <- unitest.tag("failure_demo")
+  Error("This is an intentional error result to demo the error formatting")
+}
