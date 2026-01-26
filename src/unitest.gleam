@@ -184,42 +184,39 @@ fn skip() -> a
 
 fn run_with_args(args: List(String), options: Options) -> Nil {
   case cli.parse(args) {
-    Error(help) -> {
-      io.println(help)
-    }
-    Ok(cli_opts) -> {
-      let use_color = should_use_color(cli_opts.no_color)
-
-      let tests = discover.discover_from_fs(options.test_directory)
-
-      let chosen_seed =
-        option.or(cli_opts.seed, options.seed) |> option.lazy_unwrap(auto_seed)
-
-      let sorted =
-        list.sort(tests, fn(a, b) {
-          case string.compare(a.module, b.module) {
-            order.Eq -> string.compare(a.name, b.name)
-            other -> other
-          }
-        })
-      let shuffled = runner.shuffle(sorted, chosen_seed)
-
-      let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
-
-      let sort_order = option.unwrap(cli_opts.sort_order, options.sort_order)
-      let sort_reversed =
-        bool.exclusive_or(cli_opts.sort_reversed, options.sort_reversed)
-
-      execute_and_finish(
-        plan,
-        chosen_seed,
-        use_color,
-        cli_opts.reporter,
-        sort_order,
-        sort_reversed,
-      )
-    }
+    Error(help) -> io.println(help)
+    Ok(cli_opts) -> run_with_cli_opts(cli_opts, options)
   }
+}
+
+fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
+  let use_color = should_use_color(cli_opts.no_color)
+  let tests = discover.discover_from_fs(options.test_directory)
+
+  let chosen_seed =
+    option.or(cli_opts.seed, options.seed) |> option.lazy_unwrap(auto_seed)
+
+  let sorted =
+    list.sort(tests, fn(a, b) {
+      string.compare(a.module, b.module)
+      |> order.break_tie(string.compare(a.name, b.name))
+    })
+  let shuffled = runner.shuffle(sorted, chosen_seed)
+
+  let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
+
+  let sort_order = option.unwrap(cli_opts.sort_order, options.sort_order)
+  let sort_reversed =
+    bool.exclusive_or(cli_opts.sort_reversed, options.sort_reversed)
+
+  execute_and_finish(
+    plan,
+    chosen_seed,
+    use_color,
+    cli_opts.reporter,
+    sort_order,
+    sort_reversed,
+  )
 }
 
 fn execute_and_finish(
@@ -315,11 +312,7 @@ pub fn exit_code(report: Report) -> Int {
 }
 
 fn should_use_color(cli_no_color: Bool) -> Bool {
-  case cli_no_color, envoy.get("NO_COLOR") {
-    True, _ -> False
-    _, Ok(_) -> False
-    _, Error(_) -> True
-  }
+  !cli_no_color && result.is_error(envoy.get("NO_COLOR"))
 }
 
 @external(erlang, "unitest_ffi", "now_ms")

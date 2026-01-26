@@ -1,3 +1,4 @@
+import gleam/bool
 import gleam/float
 import gleam/int
 import gleam/list
@@ -125,18 +126,17 @@ fn line_in_span(line: Int, span: LineSpan) -> Bool {
 }
 
 fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem {
-  // Skip ignored_tags check when explicitly targeting:
-  // - A specific tag (--tag)
-  // - A specific test (--test)
-  // - A specific line (file:line)
-  let skip = case filter.tag, filter.location {
+  let has_ignored_tag =
+    list.any(t.tags, fn(tag) { list.contains(ignored_tags, tag) })
+
+  let should_skip = case filter.tag, filter.location {
     option.Some(_), _ -> False
     _, OnlyTest(_, _) -> False
     _, OnlyFileAtLine(_, _) -> False
-    _, _ -> list.any(t.tags, fn(tag) { list.contains(ignored_tags, tag) })
+    _, _ -> has_ignored_tag
   }
 
-  case skip {
+  case should_skip {
     True -> Skip(t)
     False -> Run(t)
   }
@@ -344,15 +344,11 @@ fn format_status(passed: Int, failed: Int, use_color: Bool) -> String {
 }
 
 fn format_skipped(skipped: Int, use_color: Bool) -> String {
-  case skipped {
-    0 -> ""
-    n -> {
-      let text = ", " <> int.to_string(n) <> " skipped"
-      case use_color {
-        True -> ansi.yellow(text)
-        False -> text
-      }
-    }
+  use <- bool.guard(skipped == 0, "")
+  let text = ", " <> int.to_string(skipped) <> " skipped"
+  case use_color {
+    True -> ansi.yellow(text)
+    False -> text
   }
 }
 

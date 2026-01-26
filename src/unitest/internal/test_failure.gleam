@@ -211,11 +211,8 @@ fn format_duration(ms: Int) -> String {
 
 fn pad_left(n: Int, width: Int) -> String {
   let s = int.to_string(n)
-  let padding = width - string.length(s)
-  case padding > 0 {
-    True -> string.repeat("0", padding) <> s
-    False -> s
-  }
+  let padding = int.max(0, width - string.length(s))
+  string.repeat("0", padding) <> s
 }
 
 fn format_assertion_with_labels(

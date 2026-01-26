@@ -54,10 +54,7 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       use sort_rev <- clip.parameter
       use file_result <- clip.parameter
 
-      let seed = case seed_result {
-        Ok(s) -> Some(s)
-        Error(Nil) -> None
-      }
+      let seed = option.from_result(seed_result)
       #(
         file_result,
         seed,
@@ -187,13 +184,7 @@ fn resolve_filter(
     _, _, _ -> Ok(AllLocations)
   })
 
-  // Tag is independent, can combine with any location
-  let tag = case tag_result {
-    Ok(t) -> Some(t)
-    Error(Nil) -> None
-  }
-
-  Ok(Filter(location: location, tag: tag))
+  Ok(Filter(location:, tag: option.from_result(tag_result)))
 }
 
 fn parse_test_filter(test_str: String) -> Result(LocationFilter, String) {
