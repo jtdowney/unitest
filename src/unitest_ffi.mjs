@@ -1,5 +1,10 @@
 import { inspect as stringInspect } from "../gleam_stdlib/gleam/string.mjs";
-import { Result$Error, Result$Ok, Result$isError, toList } from "./gleam.mjs";
+import { Result$isError, toList } from "./gleam.mjs";
+import {
+  TestRunResult$Ran,
+  TestRunResult$RuntimeSkip,
+  TestRunResult$RunError,
+} from "./unitest/internal/runner.mjs";
 import {
   AssertedExpr$AssertedExpr,
   AssertKind$BinaryOperator,
@@ -47,6 +52,16 @@ export function yieldThen(next) {
   }
 }
 
+const SKIP_SYMBOL = Symbol.for("gleam_unitest_skip");
+
+export function skip() {
+  throw { [SKIP_SYMBOL]: true };
+}
+
+function isSkipException(e) {
+  return e && typeof e === "object" && SKIP_SYMBOL in e;
+}
+
 async function runTest(test, packageName) {
   try {
     const modulePath = test.module;
@@ -67,19 +82,22 @@ async function runTest(test, packageName) {
           0,
           PanicKind$Generic(),
         );
-        return Result$Error(error);
+        return TestRunResult$RunError(error);
       }
 
-      return Result$Ok(undefined);
+      return TestRunResult$Ran();
     } else {
       const error = parseErrorFromTest(
         new Error(`Function ${fnName} not found in module ${modulePath}`),
       );
-      return Result$Error(error);
+      return TestRunResult$RunError(error);
     }
   } catch (e) {
+    if (isSkipException(e)) {
+      return TestRunResult$RuntimeSkip();
+    }
     const error = parseErrorFromTest(e);
-    return Result$Error(error);
+    return TestRunResult$RunError(error);
   }
 }
 

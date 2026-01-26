@@ -6,4 +6,5 @@ description = "Demo project showcasing unitest features"
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 
 [dev-dependencies]
+envoy = ">= 1.1.0 and < 2.0.0"
 unitest = { path = "../.." }
