@@ -39,6 +39,7 @@ Run with `gleam test`.
 
 - **Random test ordering** with reproducible seeds
 - **Test tagging** for categorization and filtering
+- **Runtime guards** for conditional test execution (platform, version checks)
 - **CLI filtering** by file path, line number, test name, or tag
 - **Flexible output**: streaming dots (default) or table format
 
@@ -102,6 +103,36 @@ pub fn validation_test() -> Result(Nil, String) {
 ```
 
 This is useful for tests that naturally work with `Result` types, avoiding the need for `let assert Ok(_) = ...` patterns.
+
+## Runtime Guards
+
+Skip tests at runtime based on conditions that can't be checked at compile time:
+
+```gleam
+import unitest
+
+pub fn otp27_feature_test() {
+  use <- unitest.guard(otp_version() >= 27)
+  // test runs only if OTP >= 27
+}
+
+pub fn requires_database_test() {
+  use <- unitest.guard(envoy.get("DATABASE_URL") |> result.is_ok)
+  // test runs only if DATABASE_URL is set
+}
+```
+
+Guards and tags can be combined:
+
+```gleam
+pub fn slow_integration_test() {
+  use <- unitest.tag("slow")
+  use <- unitest.guard(envoy.get("CI") |> result.is_ok)
+  // slow test that only runs in CI
+}
+```
+
+Skipped tests show as `S` in the output.
 
 ## Ignoring Tags by Default
 

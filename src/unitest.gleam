@@ -24,7 +24,6 @@ import unitest/internal/cli.{
 import unitest/internal/discover.{type Test}
 import unitest/internal/format_table
 import unitest/internal/runner.{type Progress, type Report, type TestResult}
-import unitest/internal/test_failure.{type TestFailure}
 
 const yield_every_n_tests = 5
 
@@ -150,6 +149,38 @@ pub fn tag(_tag: String, next: fn() -> a) -> a {
 pub fn tags(_tags: List(String), next: fn() -> a) -> a {
   next()
 }
+
+/// Conditionally skip a test at runtime based on a boolean condition.
+///
+/// Use with Gleam's `use` syntax. If the condition is `False`, the test
+/// is skipped and reported as `S` in the output.
+///
+/// ## Example
+///
+/// ```gleam
+/// pub fn otp28_feature_test() {
+///   use <- unitest.guard(otp_version() >= 28)
+///   // test runs only if OTP >= 28
+/// }
+/// ```
+///
+/// Multiple guards can be chained:
+///
+/// ```gleam
+/// pub fn linux_otp28_test() {
+///   use <- unitest.guard(is_linux())
+///   use <- unitest.guard(otp_version() >= 28)
+///   // runs only if both conditions are true
+/// }
+/// ```
+pub fn guard(condition: Bool, next: fn() -> a) -> a {
+  use <- bool.guard(!condition, skip())
+  next()
+}
+
+@external(erlang, "unitest_ffi", "skip")
+@external(javascript, "./unitest_ffi.mjs", "skip")
+fn skip() -> a
 
 fn run_with_args(args: List(String), options: Options) -> Nil {
   case cli.parse(args) {
@@ -300,7 +331,7 @@ fn now_ms_ffi() -> Int
 fn run_test_ffi(
   t: Test,
   package_name: String,
-  k: fn(Result(Nil, TestFailure)) -> Nil,
+  k: fn(runner.TestRunResult) -> Nil,
 ) -> Nil
 
 @target(erlang)

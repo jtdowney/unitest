@@ -1,6 +1,6 @@
 -module(unitest_ffi).
 
--export([run_test/1, run_test_async/3, auto_seed/0, now_ms/0]).
+-export([run_test/1, run_test_async/3, auto_seed/0, now_ms/0, skip/0]).
 
 -include_lib("unitest/include/unitest@internal@test_failure_TestFailure.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Assert.hrl").
@@ -30,7 +30,11 @@ get_start(Map) ->
 get_end(Map) ->
     maps:get('end', Map, 0).
 
-%% Run a test function and return Ok(Nil) or Error(GleamPanic)
+%% Throw a skip exception to signal guard-based test skip
+skip() ->
+    throw({gleam_unitest, skip}).
+
+%% Run a test function and return ran, runtime_skip, or {run_error, TestFailure}
 %% Test is a Gleam record: {test, Module, Name, Tags, FilePath, LineSpan}
 run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
     ModuleConverted = binary:replace(ModuleBin, <<"/">>, <<"@">>, [global]),
@@ -39,7 +43,7 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
     try Module:Name() of
         {error, Reason} ->
             Message = iolist_to_binary([<<"Test returned Error: ">>, gleam@string:inspect(Reason)]),
-            {error, #test_failure{
+            {run_error, #test_failure{
                 message = Message,
                 file = <<>>,
                 module = <<>>,
@@ -48,14 +52,16 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
                 kind = generic
             }};
         _ ->
-            {ok, nil}
+            ran
     catch
+        throw:{gleam_unitest, skip} ->
+            runtime_skip;
         error:Reason:Stack ->
-            {error, parse_gleam_error(Reason, Stack)};
+            {run_error, parse_gleam_error(Reason, Stack)};
         throw:Reason:Stack ->
-            {error, parse_gleam_error(Reason, Stack)};
+            {run_error, parse_gleam_error(Reason, Stack)};
         exit:Reason:Stack ->
-            {error, parse_gleam_error(Reason, Stack)}
+            {run_error, parse_gleam_error(Reason, Stack)}
     end.
 
 run_test_async(Test, _PackageName, Continuation) ->

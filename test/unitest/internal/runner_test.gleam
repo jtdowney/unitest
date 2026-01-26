@@ -5,7 +5,7 @@ import unitest/internal/cli
 import unitest/internal/discover.{type Test, LineSpan, Test}
 import unitest/internal/runner.{
   type ExecuteResult, type Platform, type Progress, type TestResult, Failed,
-  Passed, Platform, Report, Run, Skip, Skipped,
+  Passed, Platform, Ran, Report, Run, RunError, RuntimeSkip, Skip, Skipped,
 }
 import unitest/internal/test_failure.{type TestFailure, Generic, TestFailure}
 
@@ -71,7 +71,7 @@ pub fn execute_passing_tests_counts_passed_test() {
   let platform =
     Platform(
       now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Ok(Nil)) },
+      run_test: fn(_t, k) { k(Ran) },
       print: fn(_s) { Nil },
     )
 
@@ -91,7 +91,7 @@ pub fn execute_failing_test_counts_failure_test() {
   let platform =
     Platform(
       now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Error(test_failure("assertion failed"))) },
+      run_test: fn(_t, k) { k(RunError(test_failure("assertion failed"))) },
       print: fn(_s) { Nil },
     )
 
@@ -115,7 +115,7 @@ pub fn execute_skipped_test_counts_skipped_test() {
   let platform =
     Platform(
       now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Ok(Nil)) },
+      run_test: fn(_t, k) { k(Ran) },
       print: fn(_s) { Nil },
     )
 
@@ -134,7 +134,7 @@ pub fn execute_captures_runtime_test() {
   let platform =
     Platform(
       now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Ok(Nil)) },
+      run_test: fn(_t, k) { k(Ran) },
       print: fn(_s) { Nil },
     )
 
@@ -142,6 +142,25 @@ pub fn execute_captures_runtime_test() {
   let report = exec_result.report
 
   assert report.runtime_ms == 0
+}
+
+pub fn execute_runtime_skip_counts_skipped_test() {
+  let t1 = make_test("foo", "guarded_test", [])
+  let plan = [Run(t1)]
+
+  let platform =
+    Platform(
+      now_ms: fn() { 100 },
+      run_test: fn(_t, k) { k(RuntimeSkip) },
+      print: fn(_s) { Nil },
+    )
+
+  use exec_result <- execute_sync(plan, 1, platform, noop_callback)
+  let report = exec_result.report
+
+  assert report.passed == 0
+  assert report.failed == 0
+  assert report.skipped == 1
 }
 
 pub fn plan_all_with_no_filter_test() {

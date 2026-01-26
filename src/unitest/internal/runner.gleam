@@ -13,6 +13,12 @@ import unitest/internal/cli.{
 import unitest/internal/discover.{type LineSpan, type Test}
 import unitest/internal/test_failure.{type TestFailure, Assert, LetAssert}
 
+pub type TestRunResult {
+  Ran
+  RuntimeSkip
+  RunError(TestFailure)
+}
+
 pub type PlanItem {
   Run(Test)
   Skip(Test)
@@ -42,7 +48,7 @@ pub type Report {
 pub type Platform {
   Platform(
     now_ms: fn() -> Int,
-    run_test: fn(Test, fn(Result(Nil, TestFailure)) -> Nil) -> Nil,
+    run_test: fn(Test, fn(TestRunResult) -> Nil) -> Nil,
     print: fn(String) -> Nil,
   )
 }
@@ -233,32 +239,47 @@ fn execute_loop(
 
 fn process_run_result(
   t: Test,
-  result: Result(Nil, TestFailure),
+  result: TestRunResult,
   duration: Int,
   state: ExecutionState,
 ) -> #(TestResult, ExecutionState) {
   case result {
-    Ok(Nil) -> {
-      let r = TestResult(item: t, outcome: Passed, duration_ms: duration)
+    Ran -> {
+      let test_result =
+        TestResult(item: t, outcome: Passed, duration_ms: duration)
       #(
-        r,
+        test_result,
         ExecutionState(
           ..state,
           passed: state.passed + 1,
-          results: [r, ..state.results],
+          results: [test_result, ..state.results],
           idx: state.idx + 1,
         ),
       )
     }
-    Error(err) -> {
-      let r = TestResult(item: t, outcome: Failed(err), duration_ms: duration)
+    RuntimeSkip -> {
+      let test_result =
+        TestResult(item: t, outcome: Skipped, duration_ms: duration)
       #(
-        r,
+        test_result,
+        ExecutionState(
+          ..state,
+          skipped: state.skipped + 1,
+          results: [test_result, ..state.results],
+          idx: state.idx + 1,
+        ),
+      )
+    }
+    RunError(err) -> {
+      let test_result =
+        TestResult(item: t, outcome: Failed(err), duration_ms: duration)
+      #(
+        test_result,
         ExecutionState(
           ..state,
           failed: state.failed + 1,
-          failures: [r, ..state.failures],
-          results: [r, ..state.results],
+          failures: [test_result, ..state.failures],
+          results: [test_result, ..state.results],
           idx: state.idx + 1,
         ),
       )
