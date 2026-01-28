@@ -89,11 +89,17 @@ pub fn integration_db_test() {
 }
 ```
 
-## Error Results
+## Error Results (Opt-In)
 
-Tests can return `Result(a, e)` instead of `Nil`. Returning `Error(reason)` is treated as a test failure:
+Tests can return `Result(a, e)` instead of `Nil`. When `check_results: True` is enabled, returning `Error(reason)` is treated as a test failure:
 
 ```gleam
+import unitest.{Options}
+
+pub fn main() {
+  unitest.run(Options(..unitest.default_options(), check_results: True))
+}
+
 pub fn validation_test() -> Result(Nil, String) {
   case validate_config() {
     Ok(_) -> Ok(Nil)

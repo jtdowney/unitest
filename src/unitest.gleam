@@ -38,6 +38,8 @@ const yield_every_n_tests = 5
 /// - `test_directory`: Directory containing test files.
 /// - `sort_order`: Default sort order for table reporter output.
 /// - `sort_reversed`: Whether to reverse the sort order.
+/// - `check_results`: When `True`, tests returning `Error(reason)` are
+///   treated as failures. Default is `False`.
 ///
 /// ## Example
 ///
@@ -48,6 +50,7 @@ const yield_every_n_tests = 5
 ///   test_directory: "test",
 ///   sort_order: cli.TimeSort,
 ///   sort_reversed: False,
+///   check_results: False,
 /// ))
 /// ```
 pub type Options {
@@ -57,6 +60,7 @@ pub type Options {
     test_directory: String,
     sort_order: cli.SortOrder,
     sort_reversed: Bool,
+    check_results: Bool,
   )
 }
 
@@ -68,6 +72,7 @@ pub fn default_options() -> Options {
     test_directory: "test",
     sort_order: cli.NativeSort,
     sort_reversed: False,
+    check_results: False,
   )
 }
 
@@ -216,6 +221,7 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
     cli_opts.reporter,
     sort_order,
     sort_reversed,
+    options.check_results,
   )
 }
 
@@ -226,12 +232,13 @@ fn execute_and_finish(
   reporter: Reporter,
   sort_order: SortOrder,
   sort_reversed: Bool,
+  check_results: Bool,
 ) -> Nil {
   let package_name = get_package_name()
   let platform =
     runner.Platform(
       now_ms: now_ms_ffi,
-      run_test: fn(t, k) { run_test_ffi(t, package_name, k) },
+      run_test: fn(t, k) { run_test_ffi(t, package_name, check_results, k) },
       print: io.print,
     )
 
@@ -324,6 +331,7 @@ fn now_ms_ffi() -> Int
 fn run_test_ffi(
   t: Test,
   package_name: String,
+  check_results: Bool,
   k: fn(runner.TestRunResult) -> Nil,
 ) -> Nil
 
