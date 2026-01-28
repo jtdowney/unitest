@@ -36,7 +36,7 @@ fn test_failure(message: String) -> TestFailure {
   )
 }
 
-pub fn all_passing_tests_with_color_test() {
+pub fn all_passing_tests_table_test() {
   let t1 = make_test("foo", "a_test")
   let t2 = make_test("foo", "b_test")
   let t3 = make_test("bar", "c_test")
@@ -51,7 +51,7 @@ pub fn all_passing_tests_with_color_test() {
   |> birdie.snap("all passing tests table")
 }
 
-pub fn all_failing_tests_with_color_test() {
+pub fn all_failing_tests_table_test() {
   let t1 = make_test("foo", "a_test")
   let t2 = make_test("foo", "b_test")
   let t3 = make_test("bar", "c_test")
@@ -66,7 +66,7 @@ pub fn all_failing_tests_with_color_test() {
   |> birdie.snap("all failing tests table")
 }
 
-pub fn mixed_results_with_color_test() {
+pub fn mixed_results_table_test() {
   let t1 = make_test("foo", "passing_test")
   let t2 = make_test("foo", "failing_test")
   let t3 = make_test("bar", "skipped_test")

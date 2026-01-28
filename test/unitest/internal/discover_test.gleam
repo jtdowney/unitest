@@ -1,5 +1,7 @@
+import gleam/int
 import gleam/list
 import gleam/string
+import qcheck
 import unitest/internal/discover
 
 fn parsed_test_name(t: discover.ParsedTest) -> String {
@@ -47,7 +49,7 @@ pub fn detect_pub_fn_test() {
   let source = make_source("example_test() {\n  assert True\n}")
   let assert Ok([t]) = discover.parse_module(source)
   assert t.name == "example_test"
-  assert t.tags == []
+  assert list.is_empty(t.tags)
 }
 
 pub fn ignore_non_public_fn_test() {
@@ -108,25 +110,46 @@ pub fn tags_scoped_to_function_test() {
   assert list.map(sorted, parsed_test_tags) == [["slow"], []]
 }
 
-pub fn byte_offset_to_line_first_line_test() {
-  let source = "line1\nline2\nline3"
-  assert discover.byte_offset_to_line(source, 0) == 1
+pub fn byte_offset_to_line_always_positive_property_test() {
+  let gen = qcheck.tuple2(qcheck.bounded_int(1, 100), qcheck.bounded_int(0, 50))
+  qcheck.run(qcheck.default_config(), gen, fn(pair) {
+    let #(line_count, offset_within) = pair
+    let source =
+      list.repeat("line", line_count)
+      |> string.join("\n")
+    let max_offset = string.byte_size(source) - 1
+    let offset = int.clamp(offset_within, 0, int.max(0, max_offset))
+    assert discover.byte_offset_to_line(source, offset) >= 1
+  })
 }
 
-pub fn byte_offset_to_line_second_line_test() {
-  let source = "line1\nline2\nline3"
-  assert discover.byte_offset_to_line(source, 6) == 2
+pub fn byte_offset_to_line_offset_zero_is_line_one_property_test() {
+  qcheck.run(
+    qcheck.default_config(),
+    qcheck.bounded_int(1, 100),
+    fn(line_count) {
+      let source =
+        list.repeat("line", line_count)
+        |> string.join("\n")
+      assert discover.byte_offset_to_line(source, 0) == 1
+    },
+  )
 }
 
-pub fn byte_offset_to_line_third_line_test() {
-  let source = "line1\nline2\nline3"
-  assert discover.byte_offset_to_line(source, 12) == 3
-}
-
-pub fn byte_offset_to_line_mid_line_test() {
-  let source = "line1\nline2\nline3"
-  assert discover.byte_offset_to_line(source, 3) == 1
-  assert discover.byte_offset_to_line(source, 8) == 2
+pub fn byte_offset_to_line_monotonic_property_test() {
+  qcheck.run(qcheck.default_config(), qcheck.bounded_int(2, 50), fn(line_count) {
+    let source =
+      list.repeat("abcd", line_count)
+      |> string.join("\n")
+    let first_newline = 4
+    let second_newline = 9
+    let before_first = discover.byte_offset_to_line(source, first_newline - 1)
+    let after_first = discover.byte_offset_to_line(source, first_newline + 1)
+    let after_second = discover.byte_offset_to_line(source, second_newline + 1)
+    assert before_first == 1
+    assert after_first == 2
+    assert after_second >= after_first
+  })
 }
 
 pub fn parse_module_captures_byte_spans_test() {

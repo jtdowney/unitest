@@ -2,134 +2,77 @@ import gleam/option.{None, Some}
 import gleam/string
 import unitest/internal/cli
 
+fn default_opts() -> cli.CliOptions {
+  cli.CliOptions(
+    seed: None,
+    filter: cli.Filter(location: cli.AllLocations, tag: None),
+    no_color: False,
+    reporter: cli.DotReporter,
+    sort_order: None,
+    sort_reversed: False,
+  )
+}
+
 pub fn parse_empty_args_test() {
   let result = cli.parse([])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(location: cli.AllLocations, tag: None),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  assert result == Ok(default_opts())
 }
 
 pub fn parse_seed_test() {
-  // No file arg, just seed option
   let result = cli.parse(["--seed", "123"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: Some(123),
-      filter: cli.Filter(location: cli.AllLocations, tag: None),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  assert result == Ok(cli.CliOptions(..default_opts(), seed: Some(123)))
 }
 
 pub fn parse_test_filter_test() {
   let result = cli.parse(["--test", "foo/bar_test.some_test"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyTest(module: "foo/bar_test", name: "some_test"),
-        tag: None,
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(
+      location: cli.OnlyTest(module: "foo/bar_test", name: "some_test"),
+      tag: None,
+    )
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn parse_module_filter_test() {
-  // --module is deprecated but still works, converts to OnlyFile internally
   let result = cli.parse(["--module", "foo/bar_test"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyFile("foo/bar_test.gleam"),
-        tag: None,
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(location: cli.OnlyFile("foo/bar_test.gleam"), tag: None)
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn parse_tag_filter_test() {
   let result = cli.parse(["--tag", "slow"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(location: cli.AllLocations, tag: Some("slow")),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter = cli.Filter(location: cli.AllLocations, tag: Some("slow"))
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn test_takes_precedence_over_module_test() {
   let result =
     cli.parse(["--test", "foo.bar_test", "--module", "baz", "--tag", "slow"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyTest(module: "foo", name: "bar_test"),
-        tag: Some("slow"),
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(
+      location: cli.OnlyTest(module: "foo", name: "bar_test"),
+      tag: Some("slow"),
+    )
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn module_and_tag_combined_test() {
-  // --module converts to OnlyFile internally
   let result = cli.parse(["--module", "foo", "--tag", "slow"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: Some("slow")),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: Some("slow"))
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn seed_combined_with_filter_test() {
   let result = cli.parse(["--seed", "42", "--tag", "slow"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: Some(42),
-      filter: cli.Filter(location: cli.AllLocations, tag: Some("slow")),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter = cli.Filter(location: cli.AllLocations, tag: Some("slow"))
+  assert result == Ok(cli.CliOptions(..default_opts(), seed: Some(42), filter:))
 }
 
 pub fn parse_no_color_flag_test() {
   let result = cli.parse(["--no-color"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(location: cli.AllLocations, tag: None),
-      no_color: True,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  assert result == Ok(cli.CliOptions(..default_opts(), no_color: True))
 }
 
 pub fn parse_invalid_test_filter_missing_dot_test() {
@@ -150,50 +93,29 @@ pub fn parse_invalid_test_filter_no_function_test() {
 
 pub fn parse_file_positional_arg_test() {
   let result = cli.parse(["test/foo_test.gleam"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyFile("test/foo_test.gleam"),
-        tag: None,
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(location: cli.OnlyFile("test/foo_test.gleam"), tag: None)
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn parse_file_with_line_positional_test() {
   let result = cli.parse(["test/foo_test.gleam:42"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyFileAtLine(path: "test/foo_test.gleam", line: 42),
-        tag: None,
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(
+      location: cli.OnlyFileAtLine(path: "test/foo_test.gleam", line: 42),
+      tag: None,
+    )
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn parse_file_relative_path_test() {
   let result = cli.parse(["foo_test.gleam:10"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyFileAtLine(path: "foo_test.gleam", line: 10),
-        tag: None,
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(
+      location: cli.OnlyFileAtLine(path: "foo_test.gleam", line: 10),
+      tag: None,
+    )
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn parse_file_invalid_line_test() {
@@ -221,63 +143,48 @@ pub fn parse_file_negative_line_test() {
 }
 
 pub fn test_takes_precedence_over_positional_file_test() {
-  // Positional file first, then --test option
   let result = cli.parse(["baz.gleam", "--test", "foo.bar_test"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyTest(module: "foo", name: "bar_test"),
-        tag: None,
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(
+      location: cli.OnlyTest(module: "foo", name: "bar_test"),
+      tag: None,
+    )
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn positional_file_takes_precedence_over_module_test() {
-  // Positional file first, then --module option
   let result = cli.parse(["foo.gleam", "--module", "bar"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: None),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter = cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: None)
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn file_and_tag_combined_test() {
-  // Positional file first, then --tag option
   let result = cli.parse(["test/foo.gleam", "--tag", "slow"])
-  assert result
-    == Ok(cli.CliOptions(
-      seed: None,
-      filter: cli.Filter(
-        location: cli.OnlyFile("test/foo.gleam"),
-        tag: Some("slow"),
-      ),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+  let filter =
+    cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: Some("slow"))
+  assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn file_with_seed_test() {
-  // Positional file first, then --seed option
   let result = cli.parse(["test/foo.gleam", "--seed", "42"])
+  let filter = cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: None)
+  assert result == Ok(cli.CliOptions(..default_opts(), seed: Some(42), filter:))
+}
+
+pub fn parse_reporter_table_test() {
+  let result = cli.parse(["--reporter", "table"])
   assert result
-    == Ok(cli.CliOptions(
-      seed: Some(42),
-      filter: cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: None),
-      no_color: False,
-      reporter: cli.DotReporter,
-      sort_order: None,
-      sort_reversed: False,
-    ))
+    == Ok(cli.CliOptions(..default_opts(), reporter: cli.TableReporter))
+}
+
+pub fn parse_sort_time_test() {
+  let result = cli.parse(["--sort", "time"])
+  assert result
+    == Ok(cli.CliOptions(..default_opts(), sort_order: Some(cli.TimeSort)))
+}
+
+pub fn parse_sort_name_test() {
+  let result = cli.parse(["--sort", "name"])
+  assert result
+    == Ok(cli.CliOptions(..default_opts(), sort_order: Some(cli.NameSort)))
 }

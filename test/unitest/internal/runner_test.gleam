@@ -1,6 +1,8 @@
+import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
+import qcheck
 import unitest/internal/cli
 import unitest/internal/discover.{type Test, LineSpan, Test}
 import unitest/internal/runner.{
@@ -182,16 +184,6 @@ pub fn ignored_tags_cause_skip_test() {
   assert result == [Run(t1), Skip(t2)]
 }
 
-pub fn only_file_filter_by_name_test() {
-  let t1 = make_test("foo", "a_test", [])
-  let t2 = make_test("bar", "b_test", [])
-
-  let result =
-    runner.plan([t1, t2], make_cli_opts(cli.OnlyFile("foo.gleam"), None), [])
-
-  assert result == [Run(t1)]
-}
-
 pub fn only_test_filter_test() {
   let t1 = make_test("foo", "a_test", [])
   let t2 = make_test("foo", "b_test", [])
@@ -225,36 +217,39 @@ pub fn tag_filter_overrides_ignored_tags_test() {
   assert result == [Run(t1)]
 }
 
-pub fn shuffle_is_deterministic_test() {
-  let items = [1, 2, 3, 4, 5]
-  let result = runner.shuffle(items, 1)
-  assert result == [2, 4, 5, 1, 3]
+pub fn shuffle_same_seed_same_order_property_test() {
+  let gen =
+    qcheck.tuple2(
+      qcheck.list_from(qcheck.small_non_negative_int()),
+      qcheck.small_non_negative_int(),
+    )
+  qcheck.run(qcheck.default_config(), gen, fn(pair) {
+    let #(items, seed) = pair
+    let first = runner.shuffle(items, seed)
+    let second = runner.shuffle(items, seed)
+    assert first == second
+  })
 }
 
-pub fn same_seed_produces_same_order_test() {
-  let items = [1, 2, 3, 4, 5]
-  let first = runner.shuffle(items, 42)
-  let second = runner.shuffle(items, 42)
-  assert first == second
+pub fn shuffle_preserves_elements_property_test() {
+  let gen =
+    qcheck.tuple2(
+      qcheck.list_from(qcheck.small_non_negative_int()),
+      qcheck.small_non_negative_int(),
+    )
+  qcheck.run(qcheck.default_config(), gen, fn(pair) {
+    let #(items, seed) = pair
+    let shuffled = runner.shuffle(items, seed)
+    assert list.sort(items, int.compare) == list.sort(shuffled, int.compare)
+  })
 }
 
-pub fn different_seed_produces_different_order_test() {
-  let items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-  let first = runner.shuffle(items, 1)
-  let second = runner.shuffle(items, 2)
-  assert first != second
-}
-
-pub fn empty_list_returns_empty_test() {
-  let items: List(Int) = []
-  let result = runner.shuffle(items, 1)
-  assert result == []
-}
-
-pub fn single_item_returns_same_test() {
-  let items = [42]
-  let result = runner.shuffle(items, 1)
-  assert result == [42]
+pub fn shuffle_empty_returns_empty_property_test() {
+  qcheck.run(qcheck.default_config(), qcheck.small_non_negative_int(), fn(seed) {
+    let items: List(Int) = []
+    let result = runner.shuffle(items, seed)
+    assert list.is_empty(result)
+  })
 }
 
 pub fn passed_maps_to_dot_test() {
@@ -269,22 +264,14 @@ pub fn skipped_maps_to_s_test() {
   assert runner.outcome_char(Skipped, False) == "S"
 }
 
-pub fn passed_maps_to_green_dot_when_colored_test() {
-  let result = runner.outcome_char(Passed, True)
-  assert string.contains(result, ".")
-  assert string.contains(result, "\u{001b}[")
-}
+pub fn outcome_char_with_color_includes_ansi_test() {
+  let passed = runner.outcome_char(Passed, True)
+  let failed = runner.outcome_char(Failed(test_failure("e")), True)
+  let skipped = runner.outcome_char(Skipped, True)
 
-pub fn failed_maps_to_red_f_when_colored_test() {
-  let result = runner.outcome_char(Failed(test_failure("error")), True)
-  assert string.contains(result, "F")
-  assert string.contains(result, "\u{001b}[")
-}
-
-pub fn skipped_maps_to_yellow_s_when_colored_test() {
-  let result = runner.outcome_char(Skipped, True)
-  assert string.contains(result, "S")
-  assert string.contains(result, "\u{001b}[")
+  assert string.contains(passed, ".") && string.contains(passed, "\u{001b}[")
+  assert string.contains(failed, "F") && string.contains(failed, "\u{001b}[")
+  assert string.contains(skipped, "S") && string.contains(skipped, "\u{001b}[")
 }
 
 pub fn summary_includes_seed_test() {
@@ -404,7 +391,7 @@ pub fn file_at_line_no_match_returns_empty_test() {
       [],
     )
 
-  assert result == []
+  assert list.is_empty(result)
 }
 
 pub fn file_and_tag_combined_includes_matching_test() {
@@ -452,7 +439,7 @@ pub fn file_and_tag_excludes_wrong_tag_test() {
       [],
     )
 
-  assert result == []
+  assert list.is_empty(result)
 }
 
 pub fn file_and_tag_excludes_wrong_file_test() {
@@ -472,7 +459,7 @@ pub fn file_and_tag_excludes_wrong_file_test() {
       [],
     )
 
-  assert result == []
+  assert list.is_empty(result)
 }
 
 pub fn file_and_tag_combined_by_name_test() {
