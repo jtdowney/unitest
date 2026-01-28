@@ -72,3 +72,9 @@ pub fn default_options_returns_expected_defaults_test() {
   assert opts.sort_reversed == False
   assert opts.check_results == False
 }
+
+pub fn guard_is_lazyily_evaluated_test() {
+  use <- unitest.guard(True)
+  let success = True
+  assert success
+}
