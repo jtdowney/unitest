@@ -1,6 +1,6 @@
 -module(unitest_ffi).
 
--export([run_test/1, run_test_async/3, auto_seed/0, now_ms/0, skip/0]).
+-export([run_test/2, run_test_async/4, auto_seed/0, now_ms/0, skip/0]).
 
 -include_lib("unitest/include/unitest@internal@test_failure_TestFailure.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Assert.hrl").
@@ -36,12 +36,13 @@ skip() ->
 
 %% Run a test function and return ran, runtime_skip, or {run_error, TestFailure}
 %% Test is a Gleam record: {test, Module, Name, Tags, FilePath, LineSpan}
-run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
+%% CheckResults: when true, treat Error results as test failures
+run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) ->
     ModuleConverted = binary:replace(ModuleBin, <<"/">>, <<"@">>, [global]),
     Module = erlang:binary_to_atom(ModuleConverted, utf8),
     Name = erlang:binary_to_atom(NameBin, utf8),
     try Module:Name() of
-        {error, Reason} ->
+        {error, Reason} when CheckResults =:= true ->
             Message = iolist_to_binary([<<"Test returned Error: ">>, gleam@string:inspect(Reason)]),
             {run_error, #test_failure{
                 message = Message,
@@ -64,8 +65,8 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}) ->
             {run_error, parse_gleam_error(Reason, Stack)}
     end.
 
-run_test_async(Test, _PackageName, Continuation) ->
-    Result = run_test(Test),
+run_test_async(Test, _PackageName, CheckResults, Continuation) ->
+    Result = run_test(Test, CheckResults),
     Continuation(Result).
 
 %% Parse Gleam error maps into GleamPanic records

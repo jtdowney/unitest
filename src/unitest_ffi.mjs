@@ -62,7 +62,7 @@ function isSkipException(e) {
   return e && typeof e === "object" && SKIP_SYMBOL in e;
 }
 
-async function runTest(test, packageName) {
+async function runTest(test, packageName, checkResults) {
   try {
     const modulePath = test.module;
     const path = `../${packageName}/${modulePath}.mjs`;
@@ -71,7 +71,7 @@ async function runTest(test, packageName) {
 
     if (typeof mod[fnName] === "function") {
       const result = await mod[fnName]();
-      if (Result$isError(result)) {
+      if (checkResults && Result$isError(result)) {
         const reason = result[0];
         const message = "Test returned Error: " + stringInspect(reason);
         const error = TestFailure$TestFailure(
@@ -101,8 +101,8 @@ async function runTest(test, packageName) {
   }
 }
 
-export function runTestAsync(test, packageName, next) {
-  runTest(test, packageName).then((result) => {
+export function runTestAsync(test, packageName, checkResults, next) {
+  runTest(test, packageName, checkResults).then((result) => {
     next(result);
   });
 }
