@@ -11,7 +11,6 @@ Unitest is a Gleam test runner library intended as a drop-in replacement for gle
 ```bash
 gleam test                     # Run tests (Erlang target)
 gleam test --target javascript --runtime node    # JS/Node target
-gleam test --target javascript --runtime deno -- --allow-read=.,build,test,gleam.toml,manifest.toml  # JS/Deno target
 gleam format --check src test  # Check formatting
 gleam format src test          # Auto-format
 gleam run -m birdie -- accept  # Accept new snapshot tests
