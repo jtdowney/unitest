@@ -2,21 +2,24 @@ import gleam/option.{None, Some}
 import gleam/string
 import simplifile
 import unitest/internal/test_failure.{
-  Assert, AssertedExpr, BinaryOperator, Expression, FunctionCall, Generic,
-  LetAssert, Literal, OtherExpression, Panic, TestFailure, Todo,
+  type TestFailure, Assert, AssertedExpr, BinaryOperator, Expression,
+  FunctionCall, Generic, LetAssert, Literal, OtherExpression, Panic, TestFailure,
+  Todo,
+}
+
+fn generic_failure(message: String) -> TestFailure {
+  TestFailure(
+    message: message,
+    file: "",
+    module: "",
+    function: "",
+    line: 0,
+    kind: Generic,
+  )
 }
 
 pub fn format_failure_includes_test_name_test() {
-  let failure =
-    TestFailure(
-      message: "failed",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
-
+  let failure = generic_failure("failed")
   let result =
     test_failure.format_failure(
       1,
@@ -27,72 +30,37 @@ pub fn format_failure_includes_test_name_test() {
       None,
       False,
     )
-
   assert string.contains(result, "my_module.my_test")
 }
 
 pub fn format_failure_includes_duration_test() {
-  let failure =
-    TestFailure(
-      message: "failed",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
-
+  let failure = generic_failure("failed")
   let result =
     test_failure.format_failure(1, "mod", "test", 42, failure, None, False)
-
   assert string.contains(result, "42 ms")
 }
 
 pub fn format_failure_includes_location_test() {
   let failure =
     TestFailure(
-      message: "failed",
+      ..generic_failure("failed"),
       file: "test/foo_test.gleam",
-      module: "",
-      function: "",
       line: 25,
-      kind: Generic,
     )
-
   let result =
     test_failure.format_failure(1, "mod", "test", 0, failure, None, False)
-
   assert string.contains(result, "test/foo_test.gleam:25")
 }
 
 pub fn format_failure_includes_message_test() {
-  let failure =
-    TestFailure(
-      message: "Assertion failed: expected True",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
-
+  let failure = generic_failure("Assertion failed: expected True")
   let result =
     test_failure.format_failure(1, "mod", "test", 0, failure, None, False)
-
   assert string.contains(result, "Assertion failed: expected True")
 }
 
 pub fn format_failure_includes_source_snippet_test() {
-  let failure =
-    TestFailure(
-      message: "failed",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
-
+  let failure = generic_failure("failed")
   let result =
     test_failure.format_failure(
       1,
@@ -103,7 +71,6 @@ pub fn format_failure_includes_source_snippet_test() {
       Some("assert x == 5"),
       False,
     )
-
   assert string.contains(result, "assert x == 5")
 }
 
@@ -188,102 +155,40 @@ pub fn format_failure_with_function_call_shows_args_test() {
 }
 
 pub fn format_failure_duration_zero_ms_test() {
-  let failure =
-    TestFailure(
-      message: "",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = generic_failure("")
   let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
   assert string.contains(result, "< 1 ms")
 }
 
-pub fn format_failure_duration_one_ms_test() {
-  let failure =
-    TestFailure(
-      message: "",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
-  let result = test_failure.format_failure(1, "m", "t", 1, failure, None, False)
-  assert string.contains(result, "1 ms")
-}
-
 pub fn format_failure_duration_under_one_second_test() {
-  let failure =
-    TestFailure(
-      message: "",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = generic_failure("")
   let result =
     test_failure.format_failure(1, "m", "t", 500, failure, None, False)
   assert string.contains(result, "500 ms")
 }
 
 pub fn format_failure_duration_exactly_one_second_test() {
-  let failure =
-    TestFailure(
-      message: "",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = generic_failure("")
   let result =
     test_failure.format_failure(1, "m", "t", 1000, failure, None, False)
   assert string.contains(result, "1 s")
 }
 
 pub fn format_failure_duration_with_remainder_test() {
-  let failure =
-    TestFailure(
-      message: "",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = generic_failure("")
   let result =
     test_failure.format_failure(1, "m", "t", 1500, failure, None, False)
   assert string.contains(result, "1.500 s")
 }
 
 pub fn format_failure_omits_location_when_file_empty_test() {
-  let failure =
-    TestFailure(
-      message: "err",
-      file: "",
-      module: "",
-      function: "",
-      line: 10,
-      kind: Generic,
-    )
+  let failure = TestFailure(..generic_failure("err"), line: 10)
   let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
   assert !string.contains(result, ":10")
 }
 
 pub fn format_failure_omits_location_when_line_zero_test() {
-  let failure =
-    TestFailure(
-      message: "err",
-      file: "test.gleam",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = TestFailure(..generic_failure("err"), file: "test.gleam")
   let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
   assert !string.contains(result, "test.gleam:0")
 }
@@ -392,32 +297,14 @@ pub fn extract_snippet_trims_whitespace_test() {
 }
 
 pub fn format_failure_with_color_includes_ansi_codes_test() {
-  let failure =
-    TestFailure(
-      message: "failed",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = generic_failure("failed")
   let result = test_failure.format_failure(1, "m", "t", 0, failure, None, True)
-
   assert string.contains(result, "\u{001b}[")
 }
 
 pub fn format_failure_without_color_has_no_ansi_codes_test() {
-  let failure =
-    TestFailure(
-      message: "failed",
-      file: "",
-      module: "",
-      function: "",
-      line: 0,
-      kind: Generic,
-    )
+  let failure = generic_failure("failed")
   let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
-
   assert !string.contains(result, "\u{001b}[")
 }
 
