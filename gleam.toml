@@ -1,5 +1,5 @@
 name = "unitest"
-version = "1.4.1"
+version = "1.4.2"
 description = "Test runner with random ordering, tagging, and CLI filtering"
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "jtdowney", repo = "unitest" }
