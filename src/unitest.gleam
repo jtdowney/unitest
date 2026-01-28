@@ -179,8 +179,7 @@ pub fn tags(_tags: List(String), next: fn() -> a) -> a {
 /// }
 /// ```
 pub fn guard(condition: Bool, next: fn() -> a) -> a {
-  use <- bool.guard(!condition, skip())
-  next()
+  bool.lazy_guard(when: !condition, return: skip, otherwise: next)
 }
 
 @external(erlang, "unitest_ffi", "skip")
