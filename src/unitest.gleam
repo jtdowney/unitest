@@ -198,7 +198,8 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
   let tests = discover.discover_from_fs(options.test_directory)
 
   let chosen_seed =
-    option.or(cli_opts.seed, options.seed) |> option.lazy_unwrap(auto_seed)
+    option.or(cli_opts.seed, options.seed)
+    |> option.lazy_unwrap(fn() { int.random(2_147_483_647) })
 
   let sorted =
     list.sort(tests, fn(a, b) {
@@ -346,10 +347,6 @@ fn yield_then_ffi(next: fn() -> Nil) -> Nil
 @external(erlang, "erlang", "halt")
 @external(javascript, "./unitest_ffi.mjs", "halt")
 fn halt(code: Int) -> Nil
-
-@external(erlang, "unitest_ffi", "auto_seed")
-@external(javascript, "./unitest_ffi.mjs", "autoSeed")
-fn auto_seed() -> Int
 
 fn get_package_name() -> String {
   let name_result = {

@@ -1,6 +1,6 @@
 -module(unitest_ffi).
 
--export([run_test/2, run_test_async/4, auto_seed/0, now_ms/0, skip/0]).
+-export([run_test/2, run_test_async/4, now_ms/0, skip/0]).
 
 -include_lib("unitest/include/unitest@internal@test_failure_TestFailure.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Assert.hrl").
@@ -248,10 +248,6 @@ build_expr_kind(Map) ->
         _ ->
             unevaluated
     end.
-
-%% Generate a random seed based on current time
-auto_seed() ->
-    erlang:system_time(millisecond) rem 1000000.
 
 %% Get current time in milliseconds
 now_ms() ->
