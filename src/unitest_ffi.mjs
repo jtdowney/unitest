@@ -28,10 +28,6 @@ const runtime =
       ? "node"
       : null;
 
-export function autoSeed() {
-  return Date.now() % 1000000;
-}
-
 export function nowMs() {
   return Date.now();
 }
