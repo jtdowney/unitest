@@ -91,6 +91,30 @@ pub fn parse_invalid_test_filter_no_function_test() {
   }
 }
 
+pub fn parse_invalid_test_filter_empty_function_test() {
+  let result = cli.parse(["--test", "foo."])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Invalid --test format")
+    Ok(_) -> False
+  }
+}
+
+pub fn parse_invalid_test_filter_empty_module_test() {
+  let result = cli.parse(["--test", ".bar_test"])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Invalid --test format")
+    Ok(_) -> False
+  }
+}
+
+pub fn parse_invalid_test_filter_dot_only_test() {
+  let result = cli.parse(["--test", "."])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Invalid --test format")
+    Ok(_) -> False
+  }
+}
+
 pub fn parse_file_positional_arg_test() {
   let result = cli.parse(["test/foo_test.gleam"])
   let filter =
