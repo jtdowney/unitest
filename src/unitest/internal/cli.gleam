@@ -189,8 +189,9 @@ fn resolve_filter(
 
 fn parse_test_filter(test_str: String) -> Result(LocationFilter, String) {
   case string.split_once(test_str, ".") {
-    Ok(#(module, name)) -> Ok(OnlyTest(module: module, name: name))
-    Error(Nil) ->
+    Ok(#(module, name)) if module != "" && name != "" ->
+      Ok(OnlyTest(module: module, name: name))
+    _ ->
       Error(
         "Invalid --test format: '"
         <> test_str
