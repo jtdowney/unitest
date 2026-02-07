@@ -16,6 +16,7 @@ import gleam/order
 import gleam/result
 import gleam/string
 import gleam_community/ansi
+import prng/random
 import simplifile
 import spinner
 import unitest/internal/cli.{
@@ -206,7 +207,8 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
       string.compare(a.module, b.module)
       |> order.break_tie(string.compare(a.name, b.name))
     })
-  let shuffled = runner.shuffle(sorted, chosen_seed)
+  let seed = random.new_seed(chosen_seed)
+  let #(shuffled, _) = random.shuffle(sorted) |> random.step(seed)
 
   let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
 

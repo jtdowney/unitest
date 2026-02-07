@@ -1,8 +1,6 @@
-import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
-import qcheck
 import unitest/internal/cli
 import unitest/internal/discover.{type Test, LineSpan, Test}
 import unitest/internal/runner.{
@@ -215,41 +213,6 @@ pub fn tag_filter_overrides_ignored_tags_test() {
     runner.plan([t1], make_cli_opts(cli.AllLocations, Some("slow")), ["slow"])
 
   assert result == [Run(t1)]
-}
-
-pub fn shuffle_same_seed_same_order_property_test() {
-  let gen =
-    qcheck.tuple2(
-      qcheck.list_from(qcheck.small_non_negative_int()),
-      qcheck.small_non_negative_int(),
-    )
-  qcheck.run(qcheck.default_config(), gen, fn(pair) {
-    let #(items, seed) = pair
-    let first = runner.shuffle(items, seed)
-    let second = runner.shuffle(items, seed)
-    assert first == second
-  })
-}
-
-pub fn shuffle_preserves_elements_property_test() {
-  let gen =
-    qcheck.tuple2(
-      qcheck.list_from(qcheck.small_non_negative_int()),
-      qcheck.small_non_negative_int(),
-    )
-  qcheck.run(qcheck.default_config(), gen, fn(pair) {
-    let #(items, seed) = pair
-    let shuffled = runner.shuffle(items, seed)
-    assert list.sort(items, int.compare) == list.sort(shuffled, int.compare)
-  })
-}
-
-pub fn shuffle_empty_returns_empty_property_test() {
-  qcheck.run(qcheck.default_config(), qcheck.small_non_negative_int(), fn(seed) {
-    let items: List(Int) = []
-    let result = runner.shuffle(items, seed)
-    assert list.is_empty(result)
-  })
 }
 
 pub fn passed_maps_to_dot_test() {
