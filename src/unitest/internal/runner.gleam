@@ -1,13 +1,10 @@
 import gleam/bool
-import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option
-import gleam/order
 import gleam/string
 import gleam/time/duration
 import gleam_community/ansi
-import prng/random
 import unitest/internal/cli.{
   type CliOptions, type Filter, AllLocations, OnlyFile, OnlyFileAtLine, OnlyTest,
 }
@@ -140,28 +137,6 @@ fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem
     True -> Skip(t)
     False -> Run(t)
   }
-}
-
-pub fn shuffle(items: List(a), seed_value: Int) -> List(a) {
-  let seed = random.new_seed(seed_value)
-  let #(keys, _) =
-    random.fixed_size_list(random.float(0.0, 1.0), list.length(items))
-    |> random.step(seed)
-
-  list.zip(keys, items)
-  |> list.index_map(fn(pair, idx) {
-    let #(key, item) = pair
-    #(key, idx, item)
-  })
-  |> list.sort(fn(a, b) {
-    let #(key_a, idx_a, _) = a
-    let #(key_b, idx_b, _) = b
-    case float.compare(key_a, key_b) {
-      order.Eq -> int.compare(idx_a, idx_b)
-      other -> other
-    }
-  })
-  |> list.map(fn(triple) { triple.2 })
 }
 
 pub type Progress {
