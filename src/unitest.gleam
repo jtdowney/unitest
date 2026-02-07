@@ -207,8 +207,20 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
       string.compare(a.module, b.module)
       |> order.break_tie(string.compare(a.name, b.name))
     })
+  let groups = list.chunk(sorted, by: fn(t) { t.module })
+  let shuffled_gen =
+    random.shuffle(groups)
+    |> random.then(fn(shuffled_groups) {
+      list.fold(shuffled_groups, random.constant([]), fn(acc, group) {
+        acc
+        |> random.then(fn(a) {
+          random.shuffle(group)
+          |> random.map(list.append(a, _))
+        })
+      })
+    })
   let seed = random.new_seed(chosen_seed)
-  let #(shuffled, _) = random.shuffle(sorted) |> random.step(seed)
+  let #(shuffled, _) = random.step(shuffled_gen, seed)
 
   let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
 
