@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-02-09
+
+### Added
+
+- **Parallel test execution**: Tests now run concurrently using module-group pooling for faster test suites
+- **Module-group shuffling**: Tests are shuffled by module group instead of individually, preserving intra-module ordering while randomizing across modules
+
+### Fixed
+
+- Validate non-empty segments in test filter parsing
+
 ## [1.4.3] - 2026-02-02
 
 ### Changed
