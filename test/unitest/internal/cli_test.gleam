@@ -10,6 +10,7 @@ fn default_opts() -> cli.CliOptions {
     reporter: cli.DotReporter,
     sort_order: None,
     sort_reversed: False,
+    workers: None,
   )
 }
 
@@ -211,4 +212,25 @@ pub fn parse_sort_name_test() {
   let result = cli.parse(["--sort", "name"])
   assert result
     == Ok(cli.CliOptions(..default_opts(), sort_order: Some(cli.NameSort)))
+}
+
+pub fn parse_workers_test() {
+  let result = cli.parse(["--workers", "4"])
+  assert result == Ok(cli.CliOptions(..default_opts(), workers: Some(4)))
+}
+
+pub fn parse_workers_must_be_positive_test() {
+  let result = cli.parse(["--workers", "0"])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Workers must be positive")
+    Ok(_) -> False
+  }
+}
+
+pub fn parse_workers_negative_test() {
+  let result = cli.parse(["--workers", "-1"])
+  assert case result {
+    Error(msg) -> string.contains(msg, "Workers must be positive")
+    Ok(_) -> False
+  }
 }

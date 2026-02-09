@@ -11,7 +11,7 @@ import gleam/bool
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/option.{type Option, None}
+import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/result
 import gleam/string
@@ -24,9 +24,20 @@ import unitest/internal/cli.{
 }
 import unitest/internal/discover.{type Test}
 import unitest/internal/format_table
-import unitest/internal/runner.{type Progress, type Report, type TestResult}
+import unitest/internal/runner.{
+  type PoolResult, type Progress, type Report, type TestResult,
+}
 
 const yield_every_n_tests = 5
+
+const parallel_threshold = 50
+
+pub type ExecutionMode {
+  RunSequential
+  RunAsync
+  RunParallel(workers: Int)
+  RunParallelAuto
+}
 
 /// Configuration options for the test runner.
 ///
@@ -41,6 +52,13 @@ const yield_every_n_tests = 5
 /// - `sort_reversed`: Whether to reverse the sort order.
 /// - `check_results`: When `True`, tests returning `Error(reason)` are
 ///   treated as failures. Default is `False`.
+/// - `execution_mode`: Controls how tests are executed.
+///   `RunSequential` runs one test at a time.
+///   `RunAsync` runs tests concurrently within each module.
+///   `RunParallel(n)` runs n module groups simultaneously, each with
+///   per-module concurrency up to the CPU core count.
+///   `RunParallelAuto` auto-detects the number of module-group workers.
+///   Can be overridden at the CLI with `--workers`.
 ///
 /// ## Example
 ///
@@ -52,6 +70,7 @@ const yield_every_n_tests = 5
 ///   sort_order: cli.TimeSort,
 ///   sort_reversed: False,
 ///   check_results: False,
+///   execution_mode: RunSequential,
 /// ))
 /// ```
 pub type Options {
@@ -62,6 +81,7 @@ pub type Options {
     sort_order: cli.SortOrder,
     sort_reversed: Bool,
     check_results: Bool,
+    execution_mode: ExecutionMode,
   )
 }
 
@@ -74,6 +94,7 @@ pub fn default_options() -> Options {
     sort_order: cli.NativeSort,
     sort_reversed: False,
     check_results: False,
+    execution_mode: RunSequential,
   )
 }
 
@@ -187,6 +208,26 @@ pub fn guard(condition: Bool, next: fn() -> a) -> a {
 @external(javascript, "./unitest_ffi.mjs", "skip")
 fn skip() -> a
 
+@internal
+pub fn resolve_execution_mode(
+  cli_workers: Option(Int),
+  option_mode: ExecutionMode,
+  runtime_default: Int,
+) -> ExecutionMode {
+  case cli_workers {
+    Some(n) -> RunParallel(n)
+    None ->
+      case option_mode {
+        RunParallelAuto -> RunParallel(runtime_default)
+        other -> other
+      }
+  }
+}
+
+@external(erlang, "unitest_ffi", "default_workers")
+@external(javascript, "./unitest_ffi.mjs", "defaultWorkers")
+fn default_workers() -> Int
+
 fn run_with_args(args: List(String), options: Options) -> Nil {
   case cli.parse(args) {
     Error(help) -> io.println(help)
@@ -208,19 +249,8 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
       |> order.break_tie(string.compare(a.name, b.name))
     })
   let groups = list.chunk(sorted, by: fn(t) { t.module })
-  let shuffled_gen =
-    random.shuffle(groups)
-    |> random.then(fn(shuffled_groups) {
-      list.fold(shuffled_groups, random.constant([]), fn(acc, group) {
-        acc
-        |> random.then(fn(a) {
-          random.shuffle(group)
-          |> random.map(list.append(a, _))
-        })
-      })
-    })
   let seed = random.new_seed(chosen_seed)
-  let #(shuffled, _) = random.step(shuffled_gen, seed)
+  let #(shuffled, _) = random.step(shuffle_by_groups(groups), seed)
 
   let plan = runner.plan(shuffled, cli_opts, options.ignored_tags)
 
@@ -228,9 +258,30 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
   let sort_reversed =
     bool.exclusive_or(cli_opts.sort_reversed, options.sort_reversed)
 
+  let runnable_count =
+    list.count(plan, fn(item) {
+      case item {
+        runner.Run(_) -> True
+        runner.Skip(_) -> False
+      }
+    })
+
+  let mode =
+    resolve_execution_mode(
+      cli_opts.workers,
+      options.execution_mode,
+      default_workers(),
+    )
+    |> apply_parallel_threshold(
+      runnable_count,
+      options.execution_mode,
+      cli_opts.workers,
+    )
+
   execute_and_finish(
     plan,
     chosen_seed,
+    mode,
     use_color,
     cli_opts.reporter,
     sort_order,
@@ -239,9 +290,38 @@ fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
   )
 }
 
+fn shuffle_by_groups(groups: List(List(a))) -> random.Generator(List(a)) {
+  random.shuffle(groups)
+  |> random.then(fn(shuffled_groups) {
+    list.fold(shuffled_groups, random.constant([]), fn(acc, group) {
+      acc
+      |> random.then(fn(a) {
+        random.shuffle(group)
+        |> random.map(list.append(a, _))
+      })
+    })
+  })
+}
+
+@internal
+pub fn apply_parallel_threshold(
+  mode: ExecutionMode,
+  runnable_count: Int,
+  option_mode: ExecutionMode,
+  cli_workers: Option(Int),
+) -> ExecutionMode {
+  use <- bool.guard(when: option.is_some(cli_workers), return: mode)
+  case option_mode, mode {
+    RunParallelAuto, RunParallel(_) if runnable_count < parallel_threshold ->
+      RunAsync
+    _, _ -> mode
+  }
+}
+
 fn execute_and_finish(
   plan: List(runner.PlanItem),
   seed: Int,
+  mode: ExecutionMode,
   use_color: Bool,
   reporter: Reporter,
   sort_order: SortOrder,
@@ -251,8 +331,17 @@ fn execute_and_finish(
   let package_name = get_package_name()
   let platform =
     runner.Platform(
-      now_ms: now_ms_ffi,
-      run_test: fn(t, k) { run_test_ffi(t, package_name, check_results, k) },
+      now_ms: now_ms,
+      run_test: fn(t, k) { run_test_async(t, package_name, check_results, k) },
+      start_module_pool: fn(module_groups, pool_workers) {
+        start_module_pool(
+          module_groups,
+          package_name,
+          check_results,
+          pool_workers,
+        )
+      },
+      receive_pool_result: receive_pool_result,
       print: io.print,
     )
 
@@ -265,7 +354,23 @@ fn execute_and_finish(
     halt(exit_code(exec_result.report))
   }
 
-  runner.execute(plan, seed, platform, on_result, on_complete)
+  case mode {
+    RunSequential ->
+      runner.execute_sequential(plan, seed, platform, on_result, on_complete)
+    RunAsync ->
+      runner.execute_pooled(plan, seed, 1, platform, on_result, on_complete)
+    RunParallel(workers) ->
+      runner.execute_pooled(
+        plan,
+        seed,
+        workers,
+        platform,
+        on_result,
+        on_complete,
+      )
+    RunParallelAuto ->
+      panic as "RunParallelAuto should be resolved before execution"
+  }
 }
 
 type OnResultCallback =
@@ -304,7 +409,7 @@ fn build_on_result_callback(
         spinner.set_text(sp, text)
 
         case progress.current % yield_every_n_tests == 0 {
-          True -> yield_then_ffi(continue)
+          True -> yield_then(continue)
           False -> continue()
         }
       }
@@ -338,25 +443,38 @@ fn should_use_color(cli_no_color: Bool) -> Bool {
 
 @external(erlang, "unitest_ffi", "now_ms")
 @external(javascript, "./unitest_ffi.mjs", "nowMs")
-fn now_ms_ffi() -> Int
+fn now_ms() -> Int
 
 @external(erlang, "unitest_ffi", "run_test_async")
 @external(javascript, "./unitest_ffi.mjs", "runTestAsync")
-fn run_test_ffi(
+fn run_test_async(
   t: Test,
   package_name: String,
   check_results: Bool,
   k: fn(runner.TestRunResult) -> Nil,
 ) -> Nil
 
+@external(erlang, "unitest_ffi", "start_module_pool")
+@external(javascript, "./unitest_ffi.mjs", "startModulePool")
+fn start_module_pool(
+  module_groups: List(List(Test)),
+  package_name: String,
+  check_results: Bool,
+  workers: Int,
+) -> Nil
+
+@external(erlang, "unitest_ffi", "receive_pool_result")
+@external(javascript, "./unitest_ffi.mjs", "receivePoolResult")
+fn receive_pool_result(callback: fn(PoolResult) -> Nil) -> Nil
+
 @target(erlang)
-fn yield_then_ffi(next: fn() -> Nil) -> Nil {
+fn yield_then(next: fn() -> Nil) -> Nil {
   next()
 }
 
 @target(javascript)
 @external(javascript, "./unitest_ffi.mjs", "yieldThen")
-fn yield_then_ffi(next: fn() -> Nil) -> Nil
+fn yield_then(next: fn() -> Nil) -> Nil
 
 @external(erlang, "erlang", "halt")
 @external(javascript, "./unitest_ffi.mjs", "halt")
