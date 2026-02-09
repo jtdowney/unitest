@@ -43,10 +43,16 @@ pub type Report {
   )
 }
 
+pub type PoolResult {
+  PoolResult(item: Test, result: TestRunResult, duration_ms: Int)
+}
+
 pub type Platform {
   Platform(
     now_ms: fn() -> Int,
     run_test: fn(Test, fn(TestRunResult) -> Nil) -> Nil,
+    start_module_pool: fn(List(List(Test)), Int) -> Nil,
+    receive_pool_result: fn(fn(PoolResult) -> Nil) -> Nil,
     print: fn(String) -> Nil,
   )
 }
@@ -62,14 +68,14 @@ type ExecutionState {
   )
 }
 
-type ExecutionContext {
-  ExecutionContext(
+type LoopContext {
+  LoopContext(
+    total: Int,
     seed: Int,
+    start_ms: Int,
     platform: Platform,
     on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
     on_complete: fn(ExecuteResult) -> Nil,
-    start_ms: Int,
-    total: Int,
   )
 }
 
@@ -147,7 +153,7 @@ pub type ExecuteResult {
   ExecuteResult(report: Report, results: List(TestResult))
 }
 
-pub fn execute(
+pub fn execute_sequential(
   plan: List(PlanItem),
   seed: Int,
   platform: Platform,
@@ -155,21 +161,22 @@ pub fn execute(
   on_complete: fn(ExecuteResult) -> Nil,
 ) -> Nil {
   let ctx =
-    ExecutionContext(
+    LoopContext(
+      total: list.length(plan),
       seed:,
+      start_ms: platform.now_ms(),
       platform:,
       on_result:,
       on_complete:,
-      start_ms: platform.now_ms(),
-      total: list.length(plan),
     )
-  execute_loop(plan, ctx, initial_state())
+
+  execute_loop(plan, initial_state(), ctx)
 }
 
 fn execute_loop(
   plan: List(PlanItem),
-  ctx: ExecutionContext,
   state: ExecutionState,
+  ctx: LoopContext,
 ) -> Nil {
   case plan {
     [] -> {
@@ -180,36 +187,129 @@ fn execute_loop(
         results: list.reverse(state.results),
       ))
     }
+    [Skip(t), ..rest] -> {
+      let #(result, new_state) = apply_skip(t, state)
+      let progress = Progress(current: new_state.idx, total: ctx.total)
+      ctx.on_result(result, progress, fn() {
+        execute_loop(rest, new_state, ctx)
+      })
+    }
     [Run(t), ..rest] -> {
-      let test_start = ctx.platform.now_ms()
-      let progress = Progress(current: state.idx + 1, total: ctx.total)
-
-      ctx.platform.run_test(t, fn(test_result) {
-        let duration = ctx.platform.now_ms() - test_start
+      let start = ctx.platform.now_ms()
+      ctx.platform.run_test(t, fn(run_result) {
+        let duration = ctx.platform.now_ms() - start
         let #(result, new_state) =
-          process_run_result(t, test_result, duration, state)
-
+          process_run_result(t, run_result, duration, state)
+        let progress = Progress(current: new_state.idx, total: ctx.total)
         ctx.on_result(result, progress, fn() {
-          execute_loop(rest, ctx, new_state)
+          execute_loop(rest, new_state, ctx)
         })
       })
     }
-    [Skip(t), ..rest] -> {
-      let progress = Progress(current: state.idx + 1, total: ctx.total)
-      let result = TestResult(item: t, outcome: Skipped, duration_ms: 0)
-      let new_state =
-        ExecutionState(
-          ..state,
-          skipped: state.skipped + 1,
-          results: [result, ..state.results],
-          idx: state.idx + 1,
-        )
+  }
+}
 
-      ctx.on_result(result, progress, fn() {
-        execute_loop(rest, ctx, new_state)
+pub fn execute_pooled(
+  plan: List(PlanItem),
+  seed: Int,
+  workers: Int,
+  platform: Platform,
+  on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
+  on_complete: fn(ExecuteResult) -> Nil,
+) -> Nil {
+  let total = list.length(plan)
+  let start_ms = platform.now_ms()
+
+  let tests =
+    list.filter_map(plan, fn(item) {
+      case item {
+        Run(t) -> Ok(t)
+        Skip(_) -> Error(Nil)
+      }
+    })
+  let remaining = list.length(tests)
+
+  let finish = fn(final_state) {
+    let runtime_ms = platform.now_ms() - start_ms
+    let report = build_report(final_state, seed, runtime_ms)
+    on_complete(ExecuteResult(
+      report:,
+      results: list.reverse(final_state.results),
+    ))
+  }
+
+  case tests {
+    [] -> emit_skips(plan, initial_state(), total, on_result, finish)
+    _ -> {
+      let module_groups = list.chunk(tests, by: fn(t) { t.module })
+      platform.start_module_pool(module_groups, workers)
+      emit_skips(plan, initial_state(), total, on_result, fn(skip_state) {
+        receive_loop(remaining, skip_state, total, platform, on_result, finish)
       })
     }
   }
+}
+
+fn receive_loop(
+  remaining: Int,
+  state: ExecutionState,
+  total: Int,
+  platform: Platform,
+  on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
+  finish: fn(ExecutionState) -> Nil,
+) -> Nil {
+  case remaining {
+    0 -> finish(state)
+    _ -> {
+      platform.receive_pool_result(fn(pr) {
+        let #(result, new_state) =
+          process_run_result(pr.item, pr.result, pr.duration_ms, state)
+        let progress = Progress(current: new_state.idx, total: total)
+        on_result(result, progress, fn() {
+          receive_loop(
+            remaining - 1,
+            new_state,
+            total,
+            platform,
+            on_result,
+            finish,
+          )
+        })
+      })
+    }
+  }
+}
+
+fn emit_skips(
+  plan: List(PlanItem),
+  state: ExecutionState,
+  total: Int,
+  on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
+  continue: fn(ExecutionState) -> Nil,
+) -> Nil {
+  case plan {
+    [] -> continue(state)
+    [Skip(t), ..rest] -> {
+      let #(result, new_state) = apply_skip(t, state)
+      let progress = Progress(current: new_state.idx, total: total)
+      on_result(result, progress, fn() {
+        emit_skips(rest, new_state, total, on_result, continue)
+      })
+    }
+    [Run(_), ..rest] -> emit_skips(rest, state, total, on_result, continue)
+  }
+}
+
+fn apply_skip(t: Test, state: ExecutionState) -> #(TestResult, ExecutionState) {
+  let result = TestResult(item: t, outcome: Skipped, duration_ms: 0)
+  let new_state =
+    ExecutionState(
+      ..state,
+      skipped: state.skipped + 1,
+      results: [result, ..state.results],
+      idx: state.idx + 1,
+    )
+  #(result, new_state)
 }
 
 fn process_run_result(
@@ -218,48 +318,29 @@ fn process_run_result(
   duration: Int,
   state: ExecutionState,
 ) -> #(TestResult, ExecutionState) {
-  case result {
-    Ran -> {
-      let test_result =
-        TestResult(item: t, outcome: Passed, duration_ms: duration)
-      #(
-        test_result,
-        ExecutionState(
-          ..state,
-          passed: state.passed + 1,
-          results: [test_result, ..state.results],
-          idx: state.idx + 1,
-        ),
-      )
-    }
-    RuntimeSkip -> {
-      let test_result =
-        TestResult(item: t, outcome: Skipped, duration_ms: duration)
-      #(
-        test_result,
-        ExecutionState(
-          ..state,
-          skipped: state.skipped + 1,
-          results: [test_result, ..state.results],
-          idx: state.idx + 1,
-        ),
-      )
-    }
-    RunError(err) -> {
-      let test_result =
-        TestResult(item: t, outcome: Failed(err), duration_ms: duration)
-      #(
-        test_result,
-        ExecutionState(
-          ..state,
-          failed: state.failed + 1,
-          failures: [test_result, ..state.failures],
-          results: [test_result, ..state.results],
-          idx: state.idx + 1,
-        ),
-      )
-    }
+  let outcome = case result {
+    Ran -> Passed
+    RuntimeSkip -> Skipped
+    RunError(err) -> Failed(err)
   }
+  let test_result = TestResult(item: t, outcome:, duration_ms: duration)
+  let new_state = case outcome {
+    Passed ->
+      ExecutionState(..state, passed: state.passed + 1, idx: state.idx + 1)
+    Skipped ->
+      ExecutionState(..state, skipped: state.skipped + 1, idx: state.idx + 1)
+    Failed(_) ->
+      ExecutionState(
+        ..state,
+        failed: state.failed + 1,
+        failures: [test_result, ..state.failures],
+        idx: state.idx + 1,
+      )
+  }
+  #(
+    test_result,
+    ExecutionState(..new_state, results: [test_result, ..state.results]),
+  )
 }
 
 fn build_report(state: ExecutionState, seed: Int, runtime_ms: Int) -> Report {

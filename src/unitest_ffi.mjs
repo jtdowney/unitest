@@ -1,32 +1,36 @@
-import { inspect as stringInspect } from "../gleam_stdlib/gleam/string.mjs";
-import { Result$isError, toList } from "./gleam.mjs";
+import { SKIP_SYMBOL, runTestRaw } from "./unitest_common_ffi.mjs";
 import {
-  TestRunResult$Ran,
-  TestRunResult$RuntimeSkip,
-  TestRunResult$RunError,
-} from "./unitest/internal/runner.mjs";
-import {
-  AssertedExpr$AssertedExpr,
-  AssertKind$BinaryOperator,
-  AssertKind$FunctionCall,
-  AssertKind$OtherExpression,
-  ExprKind$Expression,
-  ExprKind$Literal,
-  ExprKind$Unevaluated,
-  PanicKind$Assert,
-  PanicKind$Generic,
-  PanicKind$LetAssert,
-  PanicKind$Panic,
-  PanicKind$Todo,
-  TestFailure$TestFailure,
-} from "./unitest/internal/test_failure.mjs";
+  decode_test_run_result as decodeTestRunResult,
+  wrap_pool_result as wrapPoolResult,
+  make_crash_error as makeCrashError,
+} from "./unitest/internal/js_decode.mjs";
 
-const runtime =
-  typeof Deno !== "undefined"
-    ? "deno"
-    : typeof process !== "undefined"
-      ? "node"
-      : null;
+function formatError(err) {
+  return err == null ? String(err) : err.message || String(err);
+}
+
+function detectRuntime() {
+  if (typeof Deno !== "undefined") return "deno";
+  if (typeof process !== "undefined") return "node";
+  return null;
+}
+
+const runtime = detectRuntime();
+
+const nodeOs = runtime === "node" ? await import("node:os") : null;
+const nodeWorkerThreads =
+  runtime === "node" ? await import("node:worker_threads") : null;
+
+export function defaultWorkers() {
+  if (nodeOs) {
+    const count =
+      typeof nodeOs.availableParallelism === "function"
+        ? nodeOs.availableParallelism()
+        : nodeOs.cpus().length;
+    return Math.max(1, count | 0);
+  }
+  return 1;
+}
 
 export function nowMs() {
   return Date.now();
@@ -48,183 +52,230 @@ export function yieldThen(next) {
   }
 }
 
-const SKIP_SYMBOL = Symbol.for("gleam_unitest_skip");
-
 export function skip() {
   throw { [SKIP_SYMBOL]: true };
 }
 
-function isSkipException(e) {
-  return e && typeof e === "object" && SKIP_SYMBOL in e;
-}
-
 async function runTest(test, packageName, checkResults) {
-  try {
-    const modulePath = test.module;
-    const path = `../${packageName}/${modulePath}.mjs`;
-    const mod = await import(path);
-    const fnName = test.name;
-
-    if (typeof mod[fnName] === "function") {
-      const result = await mod[fnName]();
-      if (checkResults && Result$isError(result)) {
-        const reason = result[0];
-        const message = "Test returned Error: " + stringInspect(reason);
-        const error = TestFailure$TestFailure(
-          message,
-          "",
-          "",
-          "",
-          0,
-          PanicKind$Generic(),
-        );
-        return TestRunResult$RunError(error);
-      }
-
-      return TestRunResult$Ran();
-    } else {
-      const error = parseErrorFromTest(
-        new Error(`Function ${fnName} not found in module ${modulePath}`),
-      );
-      return TestRunResult$RunError(error);
-    }
-  } catch (e) {
-    if (isSkipException(e)) {
-      return TestRunResult$RuntimeSkip();
-    }
-    const error = parseErrorFromTest(e);
-    return TestRunResult$RunError(error);
-  }
+  const moduleUrl = new URL(
+    `../${packageName}/${test.module}.mjs`,
+    import.meta.url,
+  ).href;
+  const raw = await runTestRaw(moduleUrl, test.name, checkResults);
+  return decodeTestRunResult(raw);
 }
 
 export function runTestAsync(test, packageName, checkResults, next) {
-  runTest(test, packageName, checkResults).then((result) => {
-    next(result);
-  });
+  runTest(test, packageName, checkResults)
+    .then((result) => {
+      next(result);
+    })
+    .catch((err) => {
+      next(makeCrashError(formatError(err)));
+    });
 }
 
-function parseErrorFromTest(error) {
-  if (error instanceof globalThis.Error && error.gleam_error) {
-    const message = error.message || "Unknown error";
-    const file = error.file || "";
-    const module = error.module || "";
-    const fn = error.function || "";
-    const line = error.line || 0;
+let poolResultQueue = [];
+let poolWaitingCallback = null;
 
-    let kind;
-    switch (error.gleam_error) {
-      case "assert":
-        kind = PanicKind$Assert(
-          error.start || 0,
-          error.end || 0,
-          error.expression_start || 0,
-          buildAssertKind(error),
+function deliverPoolResult(pr) {
+  if (poolWaitingCallback) {
+    const cb = poolWaitingCallback;
+    poolWaitingCallback = null;
+    cb(pr);
+  } else {
+    poolResultQueue.push(pr);
+  }
+}
+
+export function startModulePool(
+  moduleGroups,
+  packageName,
+  checkResults,
+  workers,
+) {
+  poolResultQueue = [];
+  poolWaitingCallback = null;
+
+  if (nodeWorkerThreads) {
+    try {
+      startWithWorkerThreads(moduleGroups, packageName, checkResults, workers);
+    } catch {
+      startWithPromises(moduleGroups, packageName, checkResults, workers);
+    }
+  } else {
+    startWithPromises(moduleGroups, packageName, checkResults, workers);
+  }
+}
+
+function startWithPromises(moduleGroups, packageName, checkResults, workers) {
+  const queue = moduleGroups.toArray().map((g) => g.toArray());
+  let inFlight = 0;
+  const limit = Math.max(1, workers | 0);
+  const testLimit = defaultWorkers();
+
+  const pump = () => {
+    while (inFlight < limit && queue.length > 0) {
+      const tests = queue.shift();
+      inFlight += 1;
+
+      let testInFlight = 0;
+      let testIndex = 0;
+      let completed = 0;
+
+      const pumpTests = () => {
+        while (testInFlight < testLimit && testIndex < tests.length) {
+          const test = tests[testIndex++];
+          testInFlight += 1;
+          const start = nowMs();
+          runTest(test, packageName, checkResults)
+            .then((result) => {
+              deliverPoolResult(wrapPoolResult(test, result, nowMs() - start));
+            })
+            .catch((err) => {
+              const msg = formatError(err);
+              deliverPoolResult(
+                wrapPoolResult(test, makeCrashError(msg), nowMs() - start),
+              );
+            })
+            .finally(() => {
+              testInFlight -= 1;
+              completed += 1;
+              if (completed === tests.length) {
+                inFlight -= 1;
+                pump();
+              } else {
+                pumpTests();
+              }
+            });
+        }
+      };
+      pumpTests();
+    }
+  };
+
+  pump();
+}
+
+function startWithWorkerThreads(
+  moduleGroups,
+  packageName,
+  checkResults,
+  workers,
+) {
+  const { Worker } = nodeWorkerThreads;
+  const queue = moduleGroups.toArray().map((g) => g.toArray());
+  const limit = Math.max(1, workers | 0);
+  const workerCount = Math.min(limit, queue.length);
+
+  if (workerCount === 0) return;
+
+  const workerUrl = new URL("./unitest_worker_ffi.mjs", import.meta.url);
+
+  let dispatchIndex = 0;
+  const allTests = queue.flat();
+  const batches = [];
+  let globalIdx = 0;
+  for (const group of queue) {
+    batches.push({ tests: group, globalStartIndex: globalIdx });
+    globalIdx += group.length;
+  }
+
+  let workerFailures = 0;
+  const maxWorkerFailures = 3;
+
+  function dispatch(w) {
+    if (dispatchIndex >= batches.length) {
+      w.terminate();
+      return;
+    }
+    const batchIdx = dispatchIndex++;
+    const batch = batches[batchIdx];
+    w._pendingTests = new Set(batch.tests);
+    w._pendingCount = batch.tests.length;
+
+    for (let i = 0; i < batch.tests.length; i++) {
+      const test = batch.tests[i];
+      w.postMessage({
+        type: "run",
+        testIndex: batch.globalStartIndex + i,
+        moduleUrl: new URL(
+          `../${packageName}/${test.module}.mjs`,
+          import.meta.url,
+        ).href,
+        fnName: test.name,
+        checkResults,
+      });
+    }
+  }
+
+  function handleWorkerDeath(w, reason) {
+    if (w._dead) return;
+    w._dead = true;
+
+    if (w._pendingTests && w._pendingTests.size > 0) {
+      for (const test of w._pendingTests) {
+        deliverPoolResult(wrapPoolResult(test, makeCrashError(reason), 0));
+      }
+      w._pendingTests = null;
+    }
+
+    workerFailures++;
+    if (workerFailures >= maxWorkerFailures) {
+      const remaining = batches.slice(dispatchIndex);
+      dispatchIndex = batches.length;
+      if (remaining.length > 0) {
+        const fakeGroups = {
+          toArray: () => remaining.map((b) => ({ toArray: () => b.tests })),
+        };
+        startWithPromises(fakeGroups, packageName, checkResults, workers);
+      }
+    } else if (dispatchIndex < batches.length) {
+      spawnWorker();
+    }
+  }
+
+  function spawnWorker() {
+    const w = new Worker(workerUrl, { type: "module" });
+
+    w.on("message", (msg) => {
+      if (msg.type === "ready") {
+        dispatch(w);
+      } else if (msg.type === "result") {
+        const test = allTests[msg.testIndex];
+        if (w._pendingTests) {
+          w._pendingTests.delete(test);
+        }
+        deliverPoolResult(
+          wrapPoolResult(test, decodeTestRunResult(msg.result), msg.durationMs),
         );
-        break;
-      case "panic":
-        kind = PanicKind$Panic();
-        break;
-      case "todo":
-        kind = PanicKind$Todo();
-        break;
-      case "let_assert":
-        kind = PanicKind$LetAssert(
-          error.start || 0,
-          error.end || 0,
-          stringInspect(error.value),
-        );
-        break;
-      default:
-        kind = PanicKind$Generic();
-    }
+        w._pendingCount -= 1;
+        if (w._pendingCount === 0) {
+          dispatch(w);
+        }
+      }
+    });
 
-    return TestFailure$TestFailure(message, file, module, fn, line, kind);
+    w.on("error", (err) => {
+      handleWorkerDeath(w, "Worker crashed: " + (err.message || String(err)));
+    });
+
+    w.on("exit", (code) => {
+      if (code !== 0) {
+        handleWorkerDeath(w, "Worker exited unexpectedly with code " + code);
+      }
+    });
   }
 
-  const message = formatGenericError(error);
-  return TestFailure$TestFailure(message, "", "", "", 0, PanicKind$Generic());
-}
-
-function formatGenericError(error) {
-  const errorMessage = error.message || String(error);
-
-  if (
-    errorMessage.includes("Cannot find module") ||
-    errorMessage.includes("Module not found") ||
-    errorMessage.includes("does not provide an export")
-  ) {
-    const moduleMatch = errorMessage.match(
-      /Cannot find module ['"]([^'"]+)['"]/,
-    );
-    if (moduleMatch) {
-      return `Module not found: ${moduleMatch[1]}`;
-    }
-    const exportMatch = errorMessage.match(
-      /does not provide an export named ['"]([^'"]+)['"]/,
-    );
-    if (exportMatch) {
-      return `Undefined function: ${exportMatch[1]}`;
-    }
-    return errorMessage;
-  }
-
-  if (error instanceof TypeError) {
-    const undefMatch = errorMessage.match(/(\w+) is not a function/);
-    if (undefMatch) {
-      return `Undefined function: ${undefMatch[1]}`;
-    }
-  }
-
-  if (error instanceof ReferenceError) {
-    const refMatch = errorMessage.match(/(\w+) is not defined/);
-    if (refMatch) {
-      return `Undefined: ${refMatch[1]}`;
-    }
-  }
-
-  return errorMessage;
-}
-
-function buildAssertKind(error) {
-  switch (error.kind) {
-    case "binary_operator":
-      return AssertKind$BinaryOperator(
-        String(error.operator || "=="),
-        buildAssertedExpr(error.left),
-        buildAssertedExpr(error.right),
-      );
-    case "function_call": {
-      const args = (error.arguments || []).map(buildAssertedExpr);
-      return AssertKind$FunctionCall(toList(args));
-    }
-    case "other_expression":
-      return AssertKind$OtherExpression(buildAssertedExpr(error.expression));
-    default:
-      return AssertKind$OtherExpression(
-        AssertedExpr$AssertedExpr(0, 0, ExprKind$Unevaluated()),
-      );
+  for (let i = 0; i < workerCount; i++) {
+    spawnWorker();
   }
 }
 
-function buildAssertedExpr(expr) {
-  if (!expr) {
-    return AssertedExpr$AssertedExpr(0, 0, ExprKind$Unevaluated());
+export function receivePoolResult(callback) {
+  if (poolResultQueue.length > 0) {
+    callback(poolResultQueue.shift());
+  } else {
+    poolWaitingCallback = callback;
   }
-
-  const start = expr.start || 0;
-  const end = expr.end || 0;
-
-  let kind;
-  switch (expr.kind) {
-    case "literal":
-      kind = ExprKind$Literal(stringInspect(expr.value));
-      break;
-    case "expression":
-      kind = ExprKind$Expression(stringInspect(expr.value));
-      break;
-    default:
-      kind = ExprKind$Unevaluated();
-  }
-
-  return AssertedExpr$AssertedExpr(start, end, kind);
 }

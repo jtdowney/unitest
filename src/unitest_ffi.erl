@@ -1,7 +1,16 @@
 -module(unitest_ffi).
 
--export([run_test/2, run_test_async/4, now_ms/0, skip/0]).
+-export([
+    run_test/2,
+    run_test_async/4,
+    now_ms/0,
+    skip/0,
+    default_workers/0,
+    start_module_pool/4,
+    receive_pool_result/1
+]).
 
+-include_lib("unitest/include/unitest@internal@runner_PoolResult.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_TestFailure.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Assert.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_LetAssert.hrl").
@@ -247,6 +256,155 @@ build_expr_kind(Map) ->
             #expression{value = gleam@string:inspect(Value)};
         _ ->
             unevaluated
+    end.
+
+default_workers() ->
+    Schedulers = erlang:system_info(schedulers_online),
+    case Schedulers > 0 of
+        true -> Schedulers;
+        false -> 1
+    end.
+
+start_module_pool(ModuleGroups, _PackageName, CheckResults, Workers) ->
+    Parent = self(),
+    Limit = max(1, Workers),
+    Queue = queue:from_list(ModuleGroups),
+    spawn_link(fun() -> pool_manager(Queue, Limit, 0, #{}, Parent, CheckResults) end),
+    nil.
+
+pool_manager(Queue, Limit, InFlight, Workers, Parent, CheckResults) ->
+    case {queue:is_empty(Queue), InFlight} of
+        {true, 0} ->
+            ok;
+        _ ->
+            case InFlight < Limit andalso not queue:is_empty(Queue) of
+                true ->
+                    {{value, ModuleGroup}, Rest} = queue:out(Queue),
+                    Self = self(),
+                    Pid = spawn_module_worker(ModuleGroup, CheckResults, Self),
+                    NewWorkers = maps:put(Pid, ModuleGroup, Workers),
+                    pool_manager(Rest, Limit, InFlight + 1, NewWorkers, Parent, CheckResults);
+                false ->
+                    receive
+                        {pool_result, Pid, PoolResult} ->
+                            Parent ! {unitest_pool_result, PoolResult},
+                            NewWorkers = remove_pending_test(
+                                Pid, PoolResult#pool_result.item, Workers
+                            ),
+                            pool_manager(Queue, Limit, InFlight, NewWorkers, Parent, CheckResults);
+                        {module_done, Pid} ->
+                            NewWorkers = maps:remove(Pid, Workers),
+                            pool_manager(
+                                Queue, Limit, InFlight - 1, NewWorkers, Parent, CheckResults
+                            );
+                        {'DOWN', _Ref, process, Pid, Reason} ->
+                            case maps:find(Pid, Workers) of
+                                {ok, Pending} ->
+                                    lists:foreach(
+                                        fun(Test) ->
+                                            Parent !
+                                                {unitest_pool_result,
+                                                    build_crash_pool_result(Test, Reason)}
+                                        end,
+                                        Pending
+                                    ),
+                                    NewWorkers = maps:remove(Pid, Workers),
+                                    pool_manager(
+                                        Queue, Limit, InFlight - 1, NewWorkers, Parent, CheckResults
+                                    );
+                                error ->
+                                    pool_manager(
+                                        Queue, Limit, InFlight, Workers, Parent, CheckResults
+                                    )
+                            end
+                    end
+            end
+    end.
+
+remove_pending_test(Pid, Test, Workers) ->
+    case maps:find(Pid, Workers) of
+        {ok, Pending} -> maps:put(Pid, lists:delete(Test, Pending), Workers);
+        error -> Workers
+    end.
+
+spawn_module_worker(Tests, CheckResults, Manager) ->
+    MaxConcurrent = max(1, erlang:system_info(schedulers_online)),
+    {Pid, _Ref} = spawn_monitor(fun() ->
+        process_flag(trap_exit, true),
+        module_worker_loop(Tests, MaxConcurrent, 0, #{}, Manager, CheckResults)
+    end),
+    Pid.
+
+module_worker_loop(Remaining, _MaxConcurrent, 0, _PidMap, Manager, _CheckResults) when
+    Remaining =:= []
+->
+    Manager ! {module_done, self()},
+    ok;
+module_worker_loop(Remaining, MaxConcurrent, InFlight, PidMap, Manager, CheckResults) ->
+    case InFlight < MaxConcurrent andalso Remaining =/= [] of
+        true ->
+            [Test | Rest] = Remaining,
+            Self = self(),
+            ChildPid = spawn_link(fun() ->
+                Start = now_ms(),
+                Result = run_test(Test, CheckResults),
+                Duration = now_ms() - Start,
+                Self !
+                    {test_done, self(), #pool_result{
+                        item = Test, result = Result, duration_ms = Duration
+                    }}
+            end),
+            NewPidMap = maps:put(ChildPid, Test, PidMap),
+            module_worker_loop(Rest, MaxConcurrent, InFlight + 1, NewPidMap, Manager, CheckResults);
+        false ->
+            receive
+                {test_done, ChildPid, PoolResult} ->
+                    Manager ! {pool_result, self(), PoolResult},
+                    NewPidMap = maps:remove(ChildPid, PidMap),
+                    module_worker_loop(
+                        Remaining, MaxConcurrent, InFlight - 1, NewPidMap, Manager, CheckResults
+                    );
+                {'EXIT', ChildPid, Reason} ->
+                    case maps:find(ChildPid, PidMap) of
+                        {ok, Test} ->
+                            CrashResult = build_crash_pool_result(Test, Reason),
+                            Manager ! {pool_result, self(), CrashResult},
+                            NewPidMap = maps:remove(ChildPid, PidMap),
+                            module_worker_loop(
+                                Remaining,
+                                MaxConcurrent,
+                                InFlight - 1,
+                                NewPidMap,
+                                Manager,
+                                CheckResults
+                            );
+                        error ->
+                            module_worker_loop(
+                                Remaining, MaxConcurrent, InFlight, PidMap, Manager, CheckResults
+                            )
+                    end
+            end
+    end.
+
+build_crash_pool_result(Test, Reason) ->
+    Message = iolist_to_binary(io_lib:format("Process crashed: ~p", [Reason])),
+    #pool_result{
+        item = Test,
+        result =
+            {run_error, #test_failure{
+                message = Message,
+                file = <<>>,
+                module = <<>>,
+                function = <<>>,
+                line = 0,
+                kind = generic
+            }},
+        duration_ms = 0
+    }.
+
+receive_pool_result(Callback) ->
+    receive
+        {unitest_pool_result, PoolResult} -> Callback(PoolResult)
     end.
 
 %% Get current time in milliseconds

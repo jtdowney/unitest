@@ -4,8 +4,9 @@ import gleam/string
 import unitest/internal/cli
 import unitest/internal/discover.{type Test, LineSpan, Test}
 import unitest/internal/runner.{
-  type ExecuteResult, type Platform, type Progress, type TestResult, Failed,
-  Passed, Platform, Ran, Report, Run, RunError, RuntimeSkip, Skip, Skipped,
+  type ExecuteResult, type Platform, type PoolResult, type Progress,
+  type TestResult, Failed, Passed, Platform, PoolResult, Ran, Report, Run,
+  RunError, RuntimeSkip, Skip, Skipped,
 }
 import unitest/internal/test_failure.{type TestFailure, Generic, TestFailure}
 
@@ -28,6 +29,14 @@ fn test_failure(message: String) -> TestFailure {
   )
 }
 
+@external(erlang, "unitest_test_ffi", "send_pool_result")
+@external(javascript, "../../unitest_test_ffi.mjs", "sendPoolResult")
+fn send_pool_result(pr: PoolResult) -> Nil
+
+@external(erlang, "unitest_test_ffi", "receive_pool_result_test")
+@external(javascript, "../../unitest_test_ffi.mjs", "receivePoolResultTest")
+fn receive_pool_result_test(callback: fn(PoolResult) -> Nil) -> Nil
+
 fn make_test(module: String, name: String, tags: List(String)) -> Test {
   Test(
     module: module,
@@ -49,12 +58,13 @@ fn make_cli_opts(
     reporter: cli.DotReporter,
     sort_order: None,
     sort_reversed: False,
+    workers: None,
   )
 }
 
-@external(erlang, "unitest_test_ffi", "execute_sync")
-@external(javascript, "../../unitest_test_ffi.mjs", "executeSyncJs")
-fn execute_sync(
+@external(erlang, "unitest_test_ffi", "execute_sync_sequential")
+@external(javascript, "../../unitest_test_ffi.mjs", "executeSyncSequentialJs")
+fn execute_sync_sequential(
   plan: List(runner.PlanItem),
   seed: Int,
   platform: Platform,
@@ -62,20 +72,52 @@ fn execute_sync(
   callback: fn(ExecuteResult) -> a,
 ) -> a
 
+@external(erlang, "unitest_test_ffi", "execute_sync_pooled")
+@external(javascript, "../../unitest_test_ffi.mjs", "executeSyncPooledJs")
+fn execute_sync_pooled(
+  plan: List(runner.PlanItem),
+  seed: Int,
+  workers: Int,
+  platform: Platform,
+  on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
+  callback: fn(ExecuteResult) -> a,
+) -> a
+
+fn make_sequential_platform(
+  run_test: fn(Test) -> runner.TestRunResult,
+  now_ms: fn() -> Int,
+) -> Platform {
+  Platform(
+    now_ms:,
+    run_test: fn(t, k) { k(run_test(t)) },
+    start_module_pool: fn(_groups, _workers) { Nil },
+    receive_pool_result: fn(_k) { Nil },
+    print: fn(_s) { Nil },
+  )
+}
+
+fn make_pooled_platform(
+  start_module_pool: fn(List(List(Test)), Int) -> Nil,
+) -> Platform {
+  Platform(
+    now_ms: fn() { 100 },
+    run_test: fn(_t, _k) { Nil },
+    start_module_pool:,
+    receive_pool_result: receive_pool_result_test,
+    print: fn(_s) { Nil },
+  )
+}
+
 pub fn execute_passing_tests_counts_passed_test() {
   let t1 = make_test("foo", "a_test", [])
   let t2 = make_test("foo", "b_test", [])
   let t3 = make_test("foo", "c_test", [])
   let plan = [Run(t1), Run(t2), Run(t3)]
 
-  let platform =
-    Platform(
-      now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Ran) },
-      print: fn(_s) { Nil },
-    )
+  let now_ms = fn() { 100 }
+  let platform = make_sequential_platform(fn(_t) { Ran }, now_ms)
 
-  use exec_result <- execute_sync(plan, 42, platform, noop_callback)
+  use exec_result <- execute_sync_sequential(plan, 42, platform, noop_callback)
   let report = exec_result.report
 
   assert report.passed == 3
@@ -88,14 +130,14 @@ pub fn execute_failing_test_counts_failure_test() {
   let t1 = make_test("foo", "bad_test", [])
   let plan = [Run(t1)]
 
+  let now_ms = fn() { 100 }
   let platform =
-    Platform(
-      now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(RunError(test_failure("assertion failed"))) },
-      print: fn(_s) { Nil },
+    make_sequential_platform(
+      fn(_t) { RunError(test_failure("assertion failed")) },
+      now_ms,
     )
 
-  use exec_result <- execute_sync(plan, 1, platform, noop_callback)
+  use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
 
   assert report.passed == 0
@@ -112,14 +154,10 @@ pub fn execute_skipped_test_counts_skipped_test() {
   let t1 = make_test("foo", "slow_test", ["slow"])
   let plan = [Skip(t1)]
 
-  let platform =
-    Platform(
-      now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Ran) },
-      print: fn(_s) { Nil },
-    )
+  let now_ms = fn() { 100 }
+  let platform = make_sequential_platform(fn(_t) { Ran }, now_ms)
 
-  use exec_result <- execute_sync(plan, 1, platform, noop_callback)
+  use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
 
   assert report.passed == 0
@@ -131,14 +169,10 @@ pub fn execute_captures_runtime_test() {
   let t1 = make_test("foo", "a_test", [])
   let plan = [Run(t1)]
 
-  let platform =
-    Platform(
-      now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(Ran) },
-      print: fn(_s) { Nil },
-    )
+  let now_ms = fn() { 100 }
+  let platform = make_sequential_platform(fn(_t) { Ran }, now_ms)
 
-  use exec_result <- execute_sync(plan, 1, platform, noop_callback)
+  use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
 
   assert report.runtime_ms == 0
@@ -148,14 +182,10 @@ pub fn execute_runtime_skip_counts_skipped_test() {
   let t1 = make_test("foo", "guarded_test", [])
   let plan = [Run(t1)]
 
-  let platform =
-    Platform(
-      now_ms: fn() { 100 },
-      run_test: fn(_t, k) { k(RuntimeSkip) },
-      print: fn(_s) { Nil },
-    )
+  let now_ms = fn() { 100 }
+  let platform = make_sequential_platform(fn(_t) { RuntimeSkip }, now_ms)
 
-  use exec_result <- execute_sync(plan, 1, platform, noop_callback)
+  use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
 
   assert report.passed == 0
@@ -438,4 +468,141 @@ pub fn file_and_tag_combined_by_name_test() {
     )
 
   assert result == [Run(t1)]
+}
+
+pub fn execute_pooled_returns_results_in_completion_order_test() {
+  let t1 = make_test("m", "a_test", [])
+  let t2 = make_test("m", "b_test", [])
+  let t3 = make_test("m", "c_test", [])
+  let plan = [Run(t1), Run(t2), Run(t3)]
+
+  let platform =
+    make_pooled_platform(fn(_groups, _workers) {
+      send_pool_result(PoolResult(t2, Ran, 3))
+      send_pool_result(PoolResult(t1, Ran, 7))
+      send_pool_result(PoolResult(t3, Ran, 1))
+    })
+
+  use exec_result <- execute_sync_pooled(plan, 99, 2, platform, noop_callback)
+  assert list.map(exec_result.results, fn(r) { r.item.name })
+    == ["b_test", "a_test", "c_test"]
+}
+
+pub fn execute_pooled_mixed_run_skip_test() {
+  let t1 = make_test("m", "a_test", [])
+  let t2 = make_test("m", "b_test", ["slow"])
+  let t3 = make_test("m", "c_test", [])
+  let plan = [Run(t1), Skip(t2), Run(t3)]
+
+  let platform =
+    make_pooled_platform(fn(groups, _workers) {
+      list.each(groups, fn(group) {
+        list.each(group, fn(t) { send_pool_result(PoolResult(t, Ran, 5)) })
+      })
+    })
+
+  use exec_result <- execute_sync_pooled(plan, 1, 1, platform, noop_callback)
+  let report = exec_result.report
+
+  assert report.passed == 2
+  assert report.failed == 0
+  assert report.skipped == 1
+
+  let names = list.map(exec_result.results, fn(r) { r.item.name })
+  assert list.contains(names, "a_test")
+  assert list.contains(names, "b_test")
+  assert list.contains(names, "c_test")
+}
+
+pub fn execute_pooled_failed_test_in_pool_test() {
+  let t1 = make_test("m", "bad_test", [])
+  let plan = [Run(t1)]
+
+  let platform =
+    make_pooled_platform(fn(_groups, _workers) {
+      send_pool_result(PoolResult(t1, RunError(test_failure("crash bang")), 12))
+    })
+
+  use exec_result <- execute_sync_pooled(plan, 1, 1, platform, noop_callback)
+  let report = exec_result.report
+
+  assert report.passed == 0
+  assert report.failed == 1
+  assert report.skipped == 0
+  assert list.length(report.failures) == 1
+
+  let assert [failure] = report.failures
+  assert failure.item == t1
+  let assert Failed(error) = failure.outcome
+  assert error.message == "crash bang"
+}
+
+pub fn execute_pooled_mixed_pass_fail_skip_test() {
+  let t1 = make_test("m", "pass_test", [])
+  let t2 = make_test("m", "fail_test", [])
+  let t3 = make_test("m", "skip_test", ["slow"])
+  let t4 = make_test("m", "runtime_skip_test", [])
+  let plan = [Run(t1), Run(t2), Skip(t3), Run(t4)]
+
+  let platform =
+    make_pooled_platform(fn(_groups, _workers) {
+      send_pool_result(PoolResult(t1, Ran, 5))
+      send_pool_result(PoolResult(
+        t2,
+        RunError(test_failure("assertion failed")),
+        10,
+      ))
+      send_pool_result(PoolResult(t4, RuntimeSkip, 2))
+    })
+
+  use exec_result <- execute_sync_pooled(plan, 1, 1, platform, noop_callback)
+  let report = exec_result.report
+
+  assert report.passed == 1
+  assert report.failed == 1
+  assert report.skipped == 2
+
+  assert list.length(report.failures) == 1
+  let assert [failure] = report.failures
+  assert failure.item == t2
+}
+
+pub fn execute_pooled_emits_skip_callbacks_test() {
+  let t1 = make_test("m", "a_test", [])
+  let t2 = make_test("m", "b_test", ["slow"])
+  let t3 = make_test("m", "c_test", [])
+  let plan = [Run(t1), Skip(t2), Run(t3)]
+
+  let callback_outcomes = fn(
+    result: TestResult,
+    _progress: Progress,
+    continue: fn() -> Nil,
+  ) -> Nil {
+    case result.outcome {
+      Skipped -> {
+        assert result.item.name == "b_test"
+      }
+      _ -> Nil
+    }
+    continue()
+  }
+
+  let platform =
+    make_pooled_platform(fn(groups, _workers) {
+      list.each(groups, fn(group) {
+        list.each(group, fn(t) { send_pool_result(PoolResult(t, Ran, 5)) })
+      })
+    })
+
+  use exec_result <- execute_sync_pooled(
+    plan,
+    1,
+    1,
+    platform,
+    callback_outcomes,
+  )
+
+  let outcomes = list.map(exec_result.results, fn(r) { r.outcome })
+  assert list.contains(outcomes, Skipped)
+  assert exec_result.report.skipped == 1
 }

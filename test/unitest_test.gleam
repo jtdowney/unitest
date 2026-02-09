@@ -1,5 +1,5 @@
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import unitest
 import unitest/internal/cli
 import unitest/internal/runner.{Report}
@@ -71,10 +71,96 @@ pub fn default_options_returns_expected_defaults_test() {
   assert opts.sort_order == cli.NativeSort
   assert opts.sort_reversed == False
   assert opts.check_results == False
+  assert opts.execution_mode == unitest.RunSequential
 }
 
-pub fn guard_is_lazyily_evaluated_test() {
+pub fn resolve_execution_mode_cli_workers_override_test() {
+  assert unitest.resolve_execution_mode(Some(8), unitest.RunSequential, 16)
+    == unitest.RunParallel(8)
+}
+
+pub fn resolve_execution_mode_uses_option_mode_test() {
+  assert unitest.resolve_execution_mode(None, unitest.RunAsync, 16)
+    == unitest.RunAsync
+}
+
+pub fn resolve_execution_mode_auto_resolves_to_parallel_test() {
+  assert unitest.resolve_execution_mode(None, unitest.RunParallelAuto, 12)
+    == unitest.RunParallel(12)
+}
+
+pub fn resolve_execution_mode_sequential_passthrough_test() {
+  assert unitest.resolve_execution_mode(None, unitest.RunSequential, 16)
+    == unitest.RunSequential
+}
+
+pub fn resolve_execution_mode_parallel_passthrough_test() {
+  assert unitest.resolve_execution_mode(None, unitest.RunParallel(4), 16)
+    == unitest.RunParallel(4)
+}
+
+pub fn guard_is_lazily_evaluated_test() {
   use <- unitest.guard(True)
   let success = True
   assert success
+}
+
+pub fn apply_parallel_threshold_below_downgrades_to_async_test() {
+  assert unitest.apply_parallel_threshold(
+      unitest.RunParallel(4),
+      10,
+      unitest.RunParallelAuto,
+      None,
+    )
+    == unitest.RunAsync
+}
+
+pub fn apply_parallel_threshold_above_keeps_parallel_test() {
+  assert unitest.apply_parallel_threshold(
+      unitest.RunParallel(4),
+      100,
+      unitest.RunParallelAuto,
+      None,
+    )
+    == unitest.RunParallel(4)
+}
+
+pub fn apply_parallel_threshold_sequential_unaffected_test() {
+  assert unitest.apply_parallel_threshold(
+      unitest.RunSequential,
+      10,
+      unitest.RunParallelAuto,
+      None,
+    )
+    == unitest.RunSequential
+}
+
+pub fn apply_parallel_threshold_async_unaffected_test() {
+  assert unitest.apply_parallel_threshold(
+      unitest.RunAsync,
+      10,
+      unitest.RunParallelAuto,
+      None,
+    )
+    == unitest.RunAsync
+}
+
+pub fn apply_parallel_threshold_explicit_parallel_bypasses_threshold_test() {
+  assert unitest.apply_parallel_threshold(
+      unitest.RunParallel(4),
+      10,
+      unitest.RunParallel(4),
+      None,
+    )
+    == unitest.RunParallel(4)
+}
+
+pub fn apply_parallel_threshold_cli_workers_prevents_downgrade_test() {
+  assert unitest.apply_parallel_threshold(
+      unitest.RunParallel(4),
+      10,
+      unitest.RunParallelAuto,
+      Some(4),
+    )
+    == unitest.RunParallel(4)
 }

@@ -41,6 +41,7 @@ Run with `gleam test`.
 - **Test tagging** for categorization and filtering
 - **Runtime guards** for conditional test execution (platform, version checks)
 - **CLI filtering** by file path, line number, test name, or tag
+- **Parallel execution** of module groups with configurable worker count
 - **Flexible output**: streaming dots (default) or table format
 
 ## Why you may not want to use unitest
@@ -49,7 +50,6 @@ Run with `gleam test`.
 
 ## Future Work?
 
-- Parallel execution
 - Wildcard filtering
 - Smarter tag discovery
 
@@ -67,6 +67,7 @@ gleam test -- test/my_mod_test.gleam:42       # Test at line 42
 gleam test -- --test my_mod_test.fn           # Single test by name
 gleam test -- --tag slow                      # Tests with tag
 gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag
+gleam test -- --workers 4                     # Parallel with 4 module-group workers
 ```
 
 The positional file argument supports partial matching, so `my_mod_test.gleam` will match `test/my_mod_test.gleam`.

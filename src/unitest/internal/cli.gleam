@@ -38,6 +38,7 @@ pub type CliOptions {
     reporter: Reporter,
     sort_order: Option(SortOrder),
     sort_reversed: Bool,
+    workers: Option(Int),
   )
 }
 
@@ -52,9 +53,11 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       use reporter_str <- clip.parameter
       use sort_str <- clip.parameter
       use sort_rev <- clip.parameter
+      use workers_result <- clip.parameter
       use file_result <- clip.parameter
 
       let seed = option.from_result(seed_result)
+      let workers = option.from_result(workers_result)
       #(
         file_result,
         seed,
@@ -65,6 +68,7 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
         reporter_str,
         sort_str,
         sort_rev,
+        workers,
       )
     })
     |> clip.opt(
@@ -103,6 +107,12 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       flag.new("sort-rev")
       |> flag.help("Reverse the sort order (table reporter only)"),
     )
+    |> clip.opt(
+      opt.new("workers")
+      |> opt.help("Number of module groups to run in parallel")
+      |> opt.int
+      |> opt.optional,
+    )
     |> clip.arg(
       arg.new("file")
       |> arg.help(
@@ -122,6 +132,7 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
       reporter_str,
       sort_str,
       sort_rev,
+      workers,
     )
   <- result.try(
     command
@@ -137,13 +148,15 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
   ))
   use reporter <- result.try(parse_reporter(reporter_str))
   use sort_order <- result.try(parse_sort_order(sort_str))
+  use validated_workers <- result.try(validate_workers(workers))
   Ok(CliOptions(
-    seed: seed,
-    filter: filter,
-    no_color: no_color,
-    reporter: reporter,
-    sort_order: sort_order,
+    seed:,
+    filter:,
+    no_color:,
+    reporter:,
+    sort_order:,
     sort_reversed: sort_rev,
+    workers: validated_workers,
   ))
 }
 
@@ -167,6 +180,13 @@ fn parse_sort_order(
       Error(
         "Invalid sort order: '" <> other <> "'. Use 'native', 'time', or 'name'",
       )
+  }
+}
+
+fn validate_workers(workers: Option(Int)) -> Result(Option(Int), String) {
+  case workers {
+    Some(n) if n <= 0 -> Error("Workers must be positive")
+    _ -> Ok(workers)
   }
 }
 
