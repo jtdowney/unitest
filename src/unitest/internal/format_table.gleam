@@ -61,7 +61,7 @@ fn format_status(outcome: runner.Outcome, use_color: Bool) -> String {
 fn format_duration(outcome: runner.Outcome, duration_ms: Int) -> String {
   case outcome {
     Skipped -> "-"
-    _ -> int.to_string(duration_ms) <> "ms"
+    Passed | Failed(_) -> int.to_string(duration_ms) <> "ms"
   }
 }
 
@@ -87,12 +87,14 @@ fn compare_by_name(a: TestResult, b: TestResult) -> order.Order {
 
 fn compare_by_time(a: TestResult, b: TestResult, reversed: Bool) -> order.Order {
   case a.outcome, b.outcome {
-    // Both skipped - equal
     Skipped, Skipped -> order.Eq
-    // Skipped always comes last
-    Skipped, _ -> order.Gt
-    _, Skipped -> order.Lt
-    _, _ ->
+    Skipped, Passed | Skipped, Failed(_) -> order.Gt
+    Passed, Skipped | Failed(_), Skipped -> order.Lt
+    Passed, Passed
+    | Passed, Failed(_)
+    | Failed(_), Passed
+    | Failed(_), Failed(_)
+    ->
       case reversed {
         False -> int.compare(b.duration_ms, a.duration_ms)
         True -> int.compare(a.duration_ms, b.duration_ms)
