@@ -32,12 +32,16 @@ pub type TestResult {
   TestResult(item: Test, outcome: Outcome, duration_ms: Int)
 }
 
+pub type FailureRecord {
+  FailureRecord(item: Test, error: TestFailure, duration_ms: Int)
+}
+
 pub type Report {
   Report(
     passed: Int,
     failed: Int,
     skipped: Int,
-    failures: List(TestResult),
+    failures: List(FailureRecord),
     seed: Int,
     runtime_ms: Int,
   )
@@ -62,7 +66,7 @@ type ExecutionState {
     passed: Int,
     failed: Int,
     skipped: Int,
-    failures: List(TestResult),
+    failures: List(FailureRecord),
     results: List(TestResult),
     idx: Int,
   )
@@ -136,7 +140,8 @@ fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem
     option.Some(_), _ -> False
     _, OnlyTest(_, _) -> False
     _, OnlyFileAtLine(_, _) -> False
-    _, _ -> has_ignored_tag
+    option.None, AllLocations -> has_ignored_tag
+    option.None, OnlyFile(_) -> has_ignored_tag
   }
 
   case should_skip {
@@ -329,11 +334,14 @@ fn process_run_result(
       ExecutionState(..state, passed: state.passed + 1, idx: state.idx + 1)
     Skipped ->
       ExecutionState(..state, skipped: state.skipped + 1, idx: state.idx + 1)
-    Failed(_) ->
+    Failed(error) ->
       ExecutionState(
         ..state,
         failed: state.failed + 1,
-        failures: [test_result, ..state.failures],
+        failures: [
+          FailureRecord(item: t, error:, duration_ms: duration),
+          ..state.failures
+        ],
         idx: state.idx + 1,
       )
   }
@@ -408,15 +416,14 @@ fn format_skipped(skipped: Int, use_color: Bool) -> String {
   }
 }
 
-fn render_failures(failures: List(TestResult), use_color: Bool) -> String {
+fn render_failures(failures: List(FailureRecord), use_color: Bool) -> String {
   failures
   |> list.index_map(fn(f, idx) {
-    let assert Failed(error) = f.outcome
-    let source = case error.kind {
+    let source = case f.error.kind {
       Assert(start:, end:, ..) ->
-        test_failure.extract_snippet(error.file, start, end)
+        test_failure.extract_snippet(f.error.file, start, end)
       LetAssert(start:, end:, ..) ->
-        test_failure.extract_snippet(error.file, start, end)
+        test_failure.extract_snippet(f.error.file, start, end)
       _ -> option.None
     }
 
@@ -425,7 +432,7 @@ fn render_failures(failures: List(TestResult), use_color: Bool) -> String {
       f.item.module,
       f.item.name,
       f.duration_ms,
-      error,
+      f.error,
       source,
       use_color,
     )

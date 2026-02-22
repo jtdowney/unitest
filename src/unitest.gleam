@@ -39,6 +39,13 @@ pub type ExecutionMode {
   RunParallelAuto
 }
 
+@internal
+pub type ResolvedExecutionMode {
+  ResolvedSequential
+  ResolvedAsync
+  ResolvedParallel(workers: Int)
+}
+
 /// Configuration options for the test runner.
 ///
 /// ## Fields
@@ -213,13 +220,15 @@ pub fn resolve_execution_mode(
   cli_workers: Option(Int),
   option_mode: ExecutionMode,
   runtime_default: Int,
-) -> ExecutionMode {
+) -> ResolvedExecutionMode {
   case cli_workers {
-    Some(n) -> RunParallel(n)
+    Some(n) -> ResolvedParallel(n)
     None ->
       case option_mode {
-        RunParallelAuto -> RunParallel(runtime_default)
-        other -> other
+        RunSequential -> ResolvedSequential
+        RunAsync -> ResolvedAsync
+        RunParallel(n) -> ResolvedParallel(n)
+        RunParallelAuto -> ResolvedParallel(runtime_default)
       }
   }
 }
@@ -305,15 +314,15 @@ fn shuffle_by_groups(groups: List(List(a))) -> random.Generator(List(a)) {
 
 @internal
 pub fn apply_parallel_threshold(
-  mode: ExecutionMode,
+  mode: ResolvedExecutionMode,
   runnable_count: Int,
   option_mode: ExecutionMode,
   cli_workers: Option(Int),
-) -> ExecutionMode {
+) -> ResolvedExecutionMode {
   use <- bool.guard(when: option.is_some(cli_workers), return: mode)
   case option_mode, mode {
-    RunParallelAuto, RunParallel(_) if runnable_count < parallel_threshold ->
-      RunAsync
+    RunParallelAuto, ResolvedParallel(_) if runnable_count < parallel_threshold ->
+      ResolvedAsync
     _, _ -> mode
   }
 }
@@ -321,7 +330,7 @@ pub fn apply_parallel_threshold(
 fn execute_and_finish(
   plan: List(runner.PlanItem),
   seed: Int,
-  mode: ExecutionMode,
+  mode: ResolvedExecutionMode,
   use_color: Bool,
   reporter: Reporter,
   sort_order: SortOrder,
@@ -355,11 +364,11 @@ fn execute_and_finish(
   }
 
   case mode {
-    RunSequential ->
+    ResolvedSequential ->
       runner.execute_sequential(plan, seed, platform, on_result, on_complete)
-    RunAsync ->
+    ResolvedAsync ->
       runner.execute_pooled(plan, seed, 1, platform, on_result, on_complete)
-    RunParallel(workers) ->
+    ResolvedParallel(workers) ->
       runner.execute_pooled(
         plan,
         seed,
@@ -368,8 +377,6 @@ fn execute_and_finish(
         on_result,
         on_complete,
       )
-    RunParallelAuto ->
-      panic as "RunParallelAuto should be resolved before execution"
   }
 }
 

@@ -146,8 +146,7 @@ pub fn execute_failing_test_counts_failure_test() {
 
   let assert [failure] = report.failures
   assert failure.item == t1
-  let assert Failed(error) = failure.outcome
-  assert error.message == "assertion failed"
+  assert failure.error.message == "assertion failed"
 }
 
 pub fn execute_skipped_test_counts_skipped_test() {
@@ -533,8 +532,7 @@ pub fn execute_pooled_failed_test_in_pool_test() {
 
   let assert [failure] = report.failures
   assert failure.item == t1
-  let assert Failed(error) = failure.outcome
-  assert error.message == "crash bang"
+  assert failure.error.message == "crash bang"
 }
 
 pub fn execute_pooled_mixed_pass_fail_skip_test() {
