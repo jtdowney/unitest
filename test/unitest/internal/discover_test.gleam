@@ -112,44 +112,37 @@ pub fn tags_scoped_to_function_test() {
 
 pub fn byte_offset_to_line_always_positive_property_test() {
   let gen = qcheck.tuple2(qcheck.bounded_int(1, 100), qcheck.bounded_int(0, 50))
-  qcheck.run(qcheck.default_config(), gen, fn(pair) {
-    let #(line_count, offset_within) = pair
-    let source =
-      list.repeat("line", line_count)
-      |> string.join("\n")
-    let max_offset = string.byte_size(source) - 1
-    let offset = int.clamp(offset_within, 0, int.max(0, max_offset))
-    assert discover.byte_offset_to_line(source, offset) >= 1
-  })
+  use pair <- qcheck.given(gen)
+  let #(line_count, offset_within) = pair
+  let source =
+    list.repeat("line", line_count)
+    |> string.join("\n")
+  let max_offset = string.byte_size(source) - 1
+  let offset = int.clamp(offset_within, 0, int.max(0, max_offset))
+  assert discover.byte_offset_to_line(source, offset) >= 1
 }
 
 pub fn byte_offset_to_line_offset_zero_is_line_one_property_test() {
-  qcheck.run(
-    qcheck.default_config(),
-    qcheck.bounded_int(1, 100),
-    fn(line_count) {
-      let source =
-        list.repeat("line", line_count)
-        |> string.join("\n")
-      assert discover.byte_offset_to_line(source, 0) == 1
-    },
-  )
+  use line_count <- qcheck.given(qcheck.bounded_int(1, 100))
+  let source =
+    list.repeat("line", line_count)
+    |> string.join("\n")
+  assert discover.byte_offset_to_line(source, 0) == 1
 }
 
 pub fn byte_offset_to_line_monotonic_property_test() {
-  qcheck.run(qcheck.default_config(), qcheck.bounded_int(2, 50), fn(line_count) {
-    let source =
-      list.repeat("abcd", line_count)
-      |> string.join("\n")
-    let first_newline = 4
-    let second_newline = 9
-    let before_first = discover.byte_offset_to_line(source, first_newline - 1)
-    let after_first = discover.byte_offset_to_line(source, first_newline + 1)
-    let after_second = discover.byte_offset_to_line(source, second_newline + 1)
-    assert before_first == 1
-    assert after_first == 2
-    assert after_second >= after_first
-  })
+  use line_count <- qcheck.given(qcheck.bounded_int(2, 50))
+  let source =
+    list.repeat("abcd", line_count)
+    |> string.join("\n")
+  let first_newline = 4
+  let second_newline = 9
+  let before_first = discover.byte_offset_to_line(source, first_newline - 1)
+  let after_first = discover.byte_offset_to_line(source, first_newline + 1)
+  let after_second = discover.byte_offset_to_line(source, second_newline + 1)
+  assert before_first == 1
+  assert after_first == 2
+  assert after_second >= after_first
 }
 
 pub fn parse_module_captures_byte_spans_test() {
