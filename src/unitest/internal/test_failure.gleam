@@ -1,5 +1,5 @@
 import gleam/bit_array
-import gleam/bool.{guard}
+import gleam/bool
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -139,10 +139,10 @@ fn format_assert_values(kind: AssertKind, use_color: Bool) -> String {
       let right_val = format_expr_value(right.kind)
       case left_val, right_val {
         "", "" -> ""
-        l, r -> {
+        left_value, right_value -> {
           let op_text = "   operator: " <> operator
-          let left_text = "   left:  " <> l
-          let right_text = "   right: " <> r
+          let left_text = "   left:  " <> left_value
+          let right_text = "   right: " <> right_value
           let text = "\n" <> left_text <> "\n" <> right_text <> "\n" <> op_text
           maybe_color(text, use_color, ansi.yellow)
         }
@@ -251,21 +251,22 @@ fn expr_kind_label(kind: ExprKind) -> String {
   }
 }
 
-pub fn extract_snippet(file: String, start: Int, end: Int) -> Option(String) {
-  use <- guard(start <= 0 || end <= start, None)
+pub fn extract_snippet(
+  file: String,
+  start: Int,
+  end: Int,
+) -> Result(String, Nil) {
+  use <- bool.guard(start <= 0 || end <= start, Error(Nil))
   let length = end - start
 
-  let result = {
+  {
     use content <- result.try(
       simplifile.read_bits(file) |> result.replace_error(Nil),
     )
     use snippet_bits <- result.try(slice_bits(content, start, length))
     bit_array.to_string(snippet_bits) |> result.replace_error(Nil)
   }
-
-  result
   |> result.map(string.trim)
-  |> option.from_result
 }
 
 fn slice_bits(bits: BitArray, start: Int, length: Int) -> Result(BitArray, Nil) {

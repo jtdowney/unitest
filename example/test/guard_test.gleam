@@ -6,6 +6,7 @@
 
 import demo
 import envoy
+import gleam/result
 import unitest
 
 @external(erlang, "unitest_guard_demo_ffi", "otp_version")
@@ -18,14 +19,7 @@ fn require_otp(min_version: Int, next: fn() -> a) -> a {
 }
 
 fn require_env(name: String, next: fn() -> a) -> a {
-  unitest.guard(envoy.get(name) |> result_is_ok, next)
-}
-
-fn result_is_ok(result: Result(a, b)) -> Bool {
-  case result {
-    Ok(_) -> True
-    Error(_) -> False
-  }
+  unitest.guard(envoy.get(name) |> result.is_ok, next)
 }
 
 pub fn guard_always_runs_test() {

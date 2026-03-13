@@ -402,7 +402,7 @@ fn build_on_result_callback(
       #(on_result, cleanup)
     }
     TableReporter -> {
-      let sp =
+      let progress_spinner =
         spinner.new("Running tests...")
         |> spinner.with_colour(ansi.cyan)
         |> spinner.start
@@ -413,7 +413,7 @@ fn build_on_result_callback(
           <> int.to_string(progress.current)
           <> "/"
           <> int.to_string(progress.total)
-        spinner.set_text(sp, text)
+        spinner.set_text(progress_spinner, text)
 
         case progress.current % yield_every_n_tests == 0 {
           True -> yield_then(continue)
@@ -422,7 +422,7 @@ fn build_on_result_callback(
       }
 
       let cleanup = fn(exec_result: runner.ExecuteResult) {
-        spinner.stop(sp)
+        spinner.stop(progress_spinner)
         io.print(format_table.render_table(
           exec_result.results,
           use_color,
