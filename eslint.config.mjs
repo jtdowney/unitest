@@ -20,5 +20,5 @@ export default defineConfig([
     },
   },
   eslintConfigPrettier,
-  globalIgnores(["build", "examples/**/build"]),
+  globalIgnores(["build", "example/**/build"]),
 ]);
