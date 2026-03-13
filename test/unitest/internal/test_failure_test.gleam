@@ -264,18 +264,18 @@ pub fn format_failure_labels_expression_values_test() {
 
 pub fn extract_snippet_returns_none_for_invalid_start_test() {
   let result = test_failure.extract_snippet("any_file.gleam", 0, 10)
-  assert result == None
+  assert result == Error(Nil)
 }
 
 pub fn extract_snippet_returns_none_for_invalid_range_test() {
   let result = test_failure.extract_snippet("any_file.gleam", 10, 5)
-  assert result == None
+  assert result == Error(Nil)
 }
 
 pub fn extract_snippet_returns_none_for_missing_file_test() {
   let result =
     test_failure.extract_snippet("nonexistent_file_12345.gleam", 1, 10)
-  assert result == None
+  assert result == Error(Nil)
 }
 
 pub fn extract_snippet_extracts_content_from_file_test() {
@@ -284,7 +284,7 @@ pub fn extract_snippet_extracts_content_from_file_test() {
   let assert Ok(_) = simplifile.write(path, content)
   let result = test_failure.extract_snippet(path, 6, 11)
   let _ = simplifile.delete(path)
-  assert result == Some("world")
+  assert result == Ok("world")
 }
 
 pub fn extract_snippet_trims_whitespace_test() {
@@ -293,7 +293,7 @@ pub fn extract_snippet_trims_whitespace_test() {
   let assert Ok(_) = simplifile.write(path, content)
   let result = test_failure.extract_snippet(path, 5, 16)
   let _ = simplifile.delete(path)
-  assert result == Some("world")
+  assert result == Ok("world")
 }
 
 pub fn format_failure_with_color_includes_ansi_codes_test() {

@@ -196,15 +196,26 @@ fn resolve_filter(
   module_result: Result(String, Nil),
   tag_result: Result(String, Nil),
 ) -> Result(Filter, String) {
-  // Location filter with precedence: --test > positional file > --module (deprecated)
-  use location <- result.try(case test_result, file_result, module_result {
+  use location <- result.try(resolve_location(
+    test_result,
+    file_result,
+    module_result,
+  ))
+
+  Ok(Filter(location:, tag: option.from_result(tag_result)))
+}
+
+fn resolve_location(
+  test_result: Result(String, Nil),
+  file_result: Result(String, Nil),
+  module_result: Result(String, Nil),
+) -> Result(LocationFilter, String) {
+  case test_result, file_result, module_result {
     Ok(test_str), _, _ -> parse_test_filter(test_str)
     _, Ok(file_str), _ -> parse_file_filter(file_str)
     _, _, Ok(module) -> Ok(OnlyFile(module <> ".gleam"))
     _, _, _ -> Ok(AllLocations)
-  })
-
-  Ok(Filter(location:, tag: option.from_result(tag_result)))
+  }
 }
 
 fn parse_test_filter(test_str: String) -> Result(LocationFilter, String) {

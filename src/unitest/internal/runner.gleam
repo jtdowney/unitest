@@ -9,7 +9,7 @@ import unitest/internal/cli.{
   type CliOptions, type Filter, AllLocations, OnlyFile, OnlyFileAtLine, OnlyTest,
 }
 import unitest/internal/discover.{type LineSpan, type Test}
-import unitest/internal/test_failure.{type TestFailure, Assert, LetAssert}
+import unitest/internal/test_failure.{type TestFailure}
 
 pub type TestRunResult {
   Ran
@@ -418,21 +418,21 @@ fn format_skipped(skipped: Int, use_color: Bool) -> String {
 
 fn render_failures(failures: List(FailureRecord), use_color: Bool) -> String {
   failures
-  |> list.index_map(fn(f, idx) {
-    let source = case f.error.kind {
-      Assert(start:, end:, ..) ->
-        test_failure.extract_snippet(f.error.file, start, end)
-      LetAssert(start:, end:, ..) ->
-        test_failure.extract_snippet(f.error.file, start, end)
+  |> list.index_map(fn(failure, idx) {
+    let source = case failure.error.kind {
+      test_failure.Assert(start:, end:, ..)
+      | test_failure.LetAssert(start:, end:, ..) ->
+        test_failure.extract_snippet(failure.error.file, start, end)
+        |> option.from_result
       _ -> option.None
     }
 
     test_failure.format_failure(
       idx + 1,
-      f.item.module,
-      f.item.name,
-      f.duration_ms,
-      f.error,
+      failure.item.module,
+      failure.item.name,
+      failure.duration_ms,
+      failure.error,
       source,
       use_color,
     )
