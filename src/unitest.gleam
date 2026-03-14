@@ -32,10 +32,17 @@ const yield_every_n_tests = 5
 
 const parallel_threshold = 50
 
+/// Controls how tests are executed.
 pub type ExecutionMode {
+  /// Runs one test at a time.
   RunSequential
+  /// Runs tests concurrently within each module.
   RunAsync
+  /// Runs the given number of module groups simultaneously, each with
+  /// per-module concurrency up to the CPU core count.
   RunParallel(workers: Int)
+  /// Auto-detects the number of module-group workers. Falls back to
+  /// sequential when the test count is below the parallel threshold.
   RunParallelAuto
 }
 
@@ -59,13 +66,9 @@ pub type ResolvedExecutionMode {
 /// - `sort_reversed`: Whether to reverse the sort order.
 /// - `check_results`: When `True`, tests returning `Error(reason)` are
 ///   treated as failures. Default is `False`.
-/// - `execution_mode`: Controls how tests are executed.
-///   `RunSequential` runs one test at a time.
-///   `RunAsync` runs tests concurrently within each module.
-///   `RunParallel(n)` runs n module groups simultaneously, each with
-///   per-module concurrency up to the CPU core count.
-///   `RunParallelAuto` auto-detects the number of module-group workers.
-///   Can be overridden at the CLI with `--workers`.
+/// - `execution_mode`: Controls how tests are executed. See
+///   [`ExecutionMode`](#ExecutionMode) for details. Can be overridden
+///   at the CLI with `--workers`.
 ///
 /// ## Example
 ///
