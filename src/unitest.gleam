@@ -507,6 +507,7 @@ fn get_package_name() -> String {
   }
 }
 
+@internal
 pub fn parse_package_name(content: String) -> Result(String, Nil) {
   content
   |> string.split("\n")
