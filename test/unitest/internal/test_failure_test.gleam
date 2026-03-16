@@ -1,20 +1,16 @@
-import gleam/option.{None, Some}
+import gleam/option
 import gleam/string
 import simplifile
-import unitest/internal/test_failure.{
-  type TestFailure, Assert, AssertedExpr, BinaryOperator, Expression,
-  FunctionCall, Generic, LetAssert, Literal, OtherExpression, Panic, TestFailure,
-  Todo,
-}
+import unitest/internal/test_failure.{type TestFailure}
 
 fn generic_failure(message: String) -> TestFailure {
-  TestFailure(
+  test_failure.TestFailure(
     message: message,
     file: "",
     module: "",
     function: "",
     line: 0,
-    kind: Generic,
+    kind: test_failure.Generic,
   )
 }
 
@@ -27,7 +23,7 @@ pub fn format_failure_includes_test_name_test() {
       "my_test",
       5,
       failure,
-      None,
+      option.None,
       False,
     )
   assert string.contains(result, "my_module.my_test")
@@ -36,26 +32,50 @@ pub fn format_failure_includes_test_name_test() {
 pub fn format_failure_includes_duration_test() {
   let failure = generic_failure("failed")
   let result =
-    test_failure.format_failure(1, "mod", "test", 42, failure, None, False)
+    test_failure.format_failure(
+      1,
+      "mod",
+      "test",
+      42,
+      failure,
+      option.None,
+      False,
+    )
   assert string.contains(result, "42 ms")
 }
 
 pub fn format_failure_includes_location_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       ..generic_failure("failed"),
       file: "test/foo_test.gleam",
       line: 25,
     )
   let result =
-    test_failure.format_failure(1, "mod", "test", 0, failure, None, False)
+    test_failure.format_failure(
+      1,
+      "mod",
+      "test",
+      0,
+      failure,
+      option.None,
+      False,
+    )
   assert string.contains(result, "test/foo_test.gleam:25")
 }
 
 pub fn format_failure_includes_message_test() {
   let failure = generic_failure("Assertion failed: expected True")
   let result =
-    test_failure.format_failure(1, "mod", "test", 0, failure, None, False)
+    test_failure.format_failure(
+      1,
+      "mod",
+      "test",
+      0,
+      failure,
+      option.None,
+      False,
+    )
   assert string.contains(result, "Assertion failed: expected True")
 }
 
@@ -68,7 +88,7 @@ pub fn format_failure_includes_source_snippet_test() {
       "test",
       0,
       failure,
-      Some("assert x == 5"),
+      option.Some("assert x == 5"),
       False,
     )
   assert string.contains(result, "assert x == 5")
@@ -76,20 +96,28 @@ pub fn format_failure_includes_source_snippet_test() {
 
 pub fn format_failure_with_binary_operator_shows_left_right_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "Assertion failed",
       file: "",
       module: "",
       function: "",
       line: 0,
-      kind: Assert(
+      kind: test_failure.Assert(
         start: 0,
         end: 0,
         expression_start: 0,
-        kind: BinaryOperator(
+        kind: test_failure.BinaryOperator(
           operator: "==",
-          left: AssertedExpr(start: 0, end: 0, kind: Expression("5")),
-          right: AssertedExpr(start: 0, end: 0, kind: Literal("6")),
+          left: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Expression("5"),
+          ),
+          right: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Literal("6"),
+          ),
         ),
       ),
     )
@@ -101,7 +129,7 @@ pub fn format_failure_with_binary_operator_shows_left_right_test() {
       "test",
       0,
       failure,
-      Some("assert x == 6"),
+      option.Some("assert x == 6"),
       False,
     )
 
@@ -113,42 +141,66 @@ pub fn format_failure_with_binary_operator_shows_left_right_test() {
 
 pub fn format_failure_with_let_assert_shows_value_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "Pattern match failed",
       file: "",
       module: "",
       function: "",
       line: 0,
-      kind: LetAssert(start: 0, end: 0, value: "Error(Nil)"),
+      kind: test_failure.LetAssert(start: 0, end: 0, value: "Error(Nil)"),
     )
 
   let result =
-    test_failure.format_failure(1, "mod", "test", 0, failure, None, False)
+    test_failure.format_failure(
+      1,
+      "mod",
+      "test",
+      0,
+      failure,
+      option.None,
+      False,
+    )
 
   assert string.contains(result, "value: Error(Nil)")
 }
 
 pub fn format_failure_with_function_call_shows_args_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "Assertion failed",
       file: "",
       module: "",
       function: "",
       line: 0,
-      kind: Assert(
+      kind: test_failure.Assert(
         start: 0,
         end: 0,
         expression_start: 0,
-        kind: FunctionCall(arguments: [
-          AssertedExpr(start: 0, end: 0, kind: Expression("\"hello\"")),
-          AssertedExpr(start: 0, end: 0, kind: Literal("5")),
+        kind: test_failure.FunctionCall(arguments: [
+          test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Expression("\"hello\""),
+          ),
+          test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Literal("5"),
+          ),
         ]),
       ),
     )
 
   let result =
-    test_failure.format_failure(1, "mod", "test", 0, failure, None, False)
+    test_failure.format_failure(
+      1,
+      "mod",
+      "test",
+      0,
+      failure,
+      option.None,
+      False,
+    )
 
   assert string.contains(result, "arg 0:")
   assert string.contains(result, "arg 1:")
@@ -156,59 +208,71 @@ pub fn format_failure_with_function_call_shows_args_test() {
 
 pub fn format_failure_duration_zero_ms_test() {
   let failure = generic_failure("")
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
   assert string.contains(result, "< 1 ms")
 }
 
 pub fn format_failure_duration_under_one_second_test() {
   let failure = generic_failure("")
   let result =
-    test_failure.format_failure(1, "m", "t", 500, failure, None, False)
+    test_failure.format_failure(1, "m", "t", 500, failure, option.None, False)
   assert string.contains(result, "500 ms")
 }
 
 pub fn format_failure_duration_exactly_one_second_test() {
   let failure = generic_failure("")
   let result =
-    test_failure.format_failure(1, "m", "t", 1000, failure, None, False)
+    test_failure.format_failure(1, "m", "t", 1000, failure, option.None, False)
   assert string.contains(result, "1 s")
 }
 
 pub fn format_failure_duration_with_remainder_test() {
   let failure = generic_failure("")
   let result =
-    test_failure.format_failure(1, "m", "t", 1500, failure, None, False)
+    test_failure.format_failure(1, "m", "t", 1500, failure, option.None, False)
   assert string.contains(result, "1.500 s")
 }
 
 pub fn format_failure_omits_location_when_file_empty_test() {
-  let failure = TestFailure(..generic_failure("err"), line: 10)
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let failure = test_failure.TestFailure(..generic_failure("err"), line: 10)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
   assert !string.contains(result, ":10")
 }
 
 pub fn format_failure_omits_location_when_line_zero_test() {
-  let failure = TestFailure(..generic_failure("err"), file: "test.gleam")
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let failure =
+    test_failure.TestFailure(..generic_failure("err"), file: "test.gleam")
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
   assert !string.contains(result, "test.gleam:0")
 }
 
 pub fn format_failure_labels_literal_values_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "",
       file: "",
       module: "",
       function: "",
       line: 0,
-      kind: Assert(
+      kind: test_failure.Assert(
         start: 0,
         end: 0,
         expression_start: 0,
-        kind: BinaryOperator(
+        kind: test_failure.BinaryOperator(
           operator: "==",
-          left: AssertedExpr(start: 0, end: 0, kind: Literal("5")),
-          right: AssertedExpr(start: 0, end: 0, kind: Literal("6")),
+          left: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Literal("5"),
+          ),
+          right: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Literal("6"),
+          ),
         ),
       ),
     )
@@ -220,7 +284,7 @@ pub fn format_failure_labels_literal_values_test() {
       "t",
       0,
       failure,
-      Some("assert 5 == 6"),
+      option.Some("assert 5 == 6"),
       False,
     )
 
@@ -229,20 +293,28 @@ pub fn format_failure_labels_literal_values_test() {
 
 pub fn format_failure_labels_expression_values_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "",
       file: "",
       module: "",
       function: "",
       line: 0,
-      kind: Assert(
+      kind: test_failure.Assert(
         start: 0,
         end: 0,
         expression_start: 0,
-        kind: BinaryOperator(
+        kind: test_failure.BinaryOperator(
           operator: "==",
-          left: AssertedExpr(start: 0, end: 0, kind: Expression("5")),
-          right: AssertedExpr(start: 0, end: 0, kind: Literal("6")),
+          left: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Expression("5"),
+          ),
+          right: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Literal("6"),
+          ),
         ),
       ),
     )
@@ -254,7 +326,7 @@ pub fn format_failure_labels_expression_values_test() {
       "t",
       0,
       failure,
-      Some("assert x == 6"),
+      option.Some("assert x == 6"),
       False,
     )
 
@@ -298,66 +370,73 @@ pub fn extract_snippet_trims_whitespace_test() {
 
 pub fn format_failure_with_color_includes_ansi_codes_test() {
   let failure = generic_failure("failed")
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, True)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, True)
   assert string.contains(result, "\u{001b}[")
 }
 
 pub fn format_failure_without_color_has_no_ansi_codes_test() {
   let failure = generic_failure("failed")
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
   assert !string.contains(result, "\u{001b}[")
 }
 
 pub fn format_failure_with_panic_shows_message_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "explicit panic",
       file: "test.gleam",
       module: "",
       function: "",
       line: 5,
-      kind: Panic,
+      kind: test_failure.Panic,
     )
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
 
   assert string.contains(result, "explicit panic")
 }
 
 pub fn format_failure_with_todo_shows_message_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "not implemented yet",
       file: "test.gleam",
       module: "",
       function: "",
       line: 10,
-      kind: Todo,
+      kind: test_failure.Todo,
     )
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
 
   assert string.contains(result, "not implemented yet")
 }
 
 pub fn format_failure_with_other_expression_shows_value_test() {
   let failure =
-    TestFailure(
+    test_failure.TestFailure(
       message: "",
       file: "",
       module: "",
       function: "",
       line: 0,
-      kind: Assert(
+      kind: test_failure.Assert(
         start: 0,
         end: 0,
         expression_start: 0,
-        kind: OtherExpression(expression: AssertedExpr(
-          start: 0,
-          end: 0,
-          kind: Expression("False"),
-        )),
+        kind: test_failure.OtherExpression(
+          expression: test_failure.AssertedExpr(
+            start: 0,
+            end: 0,
+            kind: test_failure.Expression("False"),
+          ),
+        ),
       ),
     )
-  let result = test_failure.format_failure(1, "m", "t", 0, failure, None, False)
+  let result =
+    test_failure.format_failure(1, "m", "t", 0, failure, option.None, False)
 
   assert string.contains(result, "value: False")
 }

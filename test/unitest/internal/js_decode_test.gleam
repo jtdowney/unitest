@@ -1,11 +1,8 @@
 import gleam/dynamic.{type Dynamic}
-import unitest/internal/discover.{LineSpan, Test}
+import unitest/internal/discover
 import unitest/internal/js_decode
-import unitest/internal/runner.{PoolResult, Ran, RunError, RuntimeSkip}
-import unitest/internal/test_failure.{
-  Assert, AssertedExpr, BinaryOperator, Expression, FunctionCall, Generic,
-  LetAssert, Literal, OtherExpression, Panic, TestFailure, Todo, Unevaluated,
-}
+import unitest/internal/runner
+import unitest/internal/test_failure
 
 fn prop(key: String, value: Dynamic) -> #(Dynamic, Dynamic) {
   #(dynamic.string(key), value)
@@ -136,18 +133,25 @@ fn make_asserted_expr_no_value(start: Int, end: Int, kind: String) -> Dynamic {
 
 pub fn decode_ran_result_test() {
   let result = js_decode.decode_test_run_result(make_ran_result())
-  assert result == Ran
+  assert result == runner.Ran
 }
 
 pub fn decode_skip_result_test() {
   let result = js_decode.decode_test_run_result(make_skip_result())
-  assert result == RuntimeSkip
+  assert result == runner.RuntimeSkip
 }
 
 pub fn decode_unknown_kind_falls_back_to_error_test() {
   let result = js_decode.decode_test_run_result(make_unknown_result())
   assert result
-    == RunError(TestFailure("Unknown result kind", "", "", "", 0, Generic))
+    == runner.RunError(test_failure.TestFailure(
+      "Unknown result kind",
+      "",
+      "",
+      "",
+      0,
+      test_failure.Generic,
+    ))
 }
 
 pub fn decode_error_with_generic_panic_test() {
@@ -162,13 +166,13 @@ pub fn decode_error_with_generic_panic_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure(
+    == runner.RunError(test_failure.TestFailure(
       "something broke",
       "src/foo.gleam",
       "foo",
       "bar",
       42,
-      Generic,
+      test_failure.Generic,
     ))
 }
 
@@ -184,7 +188,14 @@ pub fn decode_error_with_panic_kind_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure("panicked", "src/a.gleam", "a", "f", 10, Panic))
+    == runner.RunError(test_failure.TestFailure(
+      "panicked",
+      "src/a.gleam",
+      "a",
+      "f",
+      10,
+      test_failure.Panic,
+    ))
 }
 
 pub fn decode_error_with_todo_kind_test() {
@@ -192,7 +203,14 @@ pub fn decode_error_with_todo_kind_test() {
     make_error_result("not done", "src/b.gleam", "b", "g", 5, make_todo_panic())
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure("not done", "src/b.gleam", "b", "g", 5, Todo))
+    == runner.RunError(test_failure.TestFailure(
+      "not done",
+      "src/b.gleam",
+      "b",
+      "g",
+      5,
+      test_failure.Todo,
+    ))
 }
 
 pub fn decode_error_with_let_assert_kind_test() {
@@ -207,13 +225,13 @@ pub fn decode_error_with_let_assert_kind_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure(
+    == runner.RunError(test_failure.TestFailure(
       "let assert failed",
       "src/c.gleam",
       "c",
       "h",
       20,
-      LetAssert(start: 100, end: 200, value: "Error(Nil)"),
+      test_failure.LetAssert(start: 100, end: 200, value: "Error(Nil)"),
     ))
 }
 
@@ -232,20 +250,20 @@ pub fn decode_error_with_assert_binary_operator_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure(
+    == runner.RunError(test_failure.TestFailure(
       "assert failed",
       "src/d.gleam",
       "d",
       "i",
       30,
-      Assert(
+      test_failure.Assert(
         start: 5,
         end: 40,
         expression_start: 15,
-        kind: BinaryOperator(
+        kind: test_failure.BinaryOperator(
           operator: "==",
-          left: AssertedExpr(10, 20, Literal("1")),
-          right: AssertedExpr(25, 35, Expression("x")),
+          left: test_failure.AssertedExpr(10, 20, test_failure.Literal("1")),
+          right: test_failure.AssertedExpr(25, 35, test_failure.Expression("x")),
         ),
       ),
     ))
@@ -266,19 +284,19 @@ pub fn decode_error_with_assert_function_call_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure(
+    == runner.RunError(test_failure.TestFailure(
       "fn call assert",
       "src/e.gleam",
       "e",
       "j",
       50,
-      Assert(
+      test_failure.Assert(
         start: 0,
         end: 60,
         expression_start: 10,
-        kind: FunctionCall([
-          AssertedExpr(1, 5, Literal("hello")),
-          AssertedExpr(7, 12, Unevaluated),
+        kind: test_failure.FunctionCall([
+          test_failure.AssertedExpr(1, 5, test_failure.Literal("hello")),
+          test_failure.AssertedExpr(7, 12, test_failure.Unevaluated),
         ]),
       ),
     ))
@@ -298,17 +316,21 @@ pub fn decode_error_with_assert_other_expression_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == RunError(TestFailure(
+    == runner.RunError(test_failure.TestFailure(
       "other expr",
       "src/f.gleam",
       "f",
       "k",
       70,
-      Assert(
+      test_failure.Assert(
         start: 1,
         end: 80,
         expression_start: 5,
-        kind: OtherExpression(AssertedExpr(3, 8, Expression("foo()"))),
+        kind: test_failure.OtherExpression(test_failure.AssertedExpr(
+          3,
+          8,
+          test_failure.Expression("foo()"),
+        )),
       ),
     ))
 }
@@ -316,37 +338,52 @@ pub fn decode_error_with_assert_other_expression_test() {
 pub fn decode_error_missing_panic_kind_defaults_to_generic_test() {
   let raw = make_error_result_no_panic_kind("oops")
   let result = js_decode.decode_test_run_result(raw)
-  assert result == RunError(TestFailure("oops", "", "", "", 0, Generic))
+  assert result
+    == runner.RunError(test_failure.TestFailure(
+      "oops",
+      "",
+      "",
+      "",
+      0,
+      test_failure.Generic,
+    ))
 }
 
 pub fn wrap_pool_result_test() {
   let item =
-    Test(
+    discover.Test(
       module: "my_mod",
       name: "my_test",
       tags: [],
       file_path: "test/my_mod.gleam",
-      line_span: LineSpan(1, 10),
+      line_span: discover.LineSpan(1, 10),
     )
-  let result = js_decode.wrap_pool_result(item, Ran, 42)
-  assert result == PoolResult(item:, result: Ran, duration_ms: 42)
+  let result = js_decode.wrap_pool_result(item, runner.Ran, 42)
+  assert result == runner.PoolResult(item:, result: runner.Ran, duration_ms: 42)
 }
 
 pub fn decode_malformed_input_returns_run_error_test() {
   let result = js_decode.decode_test_run_result(dynamic.int(42))
   assert result
-    == RunError(TestFailure(
+    == runner.RunError(test_failure.TestFailure(
       "Failed to decode test result",
       "",
       "",
       "",
       0,
-      Generic,
+      test_failure.Generic,
     ))
 }
 
 pub fn make_crash_error_test() {
   let result = js_decode.make_crash_error("Worker crashed: timeout")
   assert result
-    == RunError(TestFailure("Worker crashed: timeout", "", "", "", 0, Generic))
+    == runner.RunError(test_failure.TestFailure(
+      "Worker crashed: timeout",
+      "",
+      "",
+      "",
+      0,
+      test_failure.Generic,
+    ))
 }

@@ -1,7 +1,5 @@
 import glance.{
   type Attribute, type Expression, type Function, type Span, type Statement,
-  Call, Expression as ExprStatement, FieldAccess, List as ListExpr, Private,
-  Public, String as StringExpr, UnlabelledField, Use, Variable,
 }
 import gleam/bit_array
 import gleam/list
@@ -101,8 +99,9 @@ pub fn parse_module_for_target(
         string.ends_with(func.name, "_test"),
         is_available_for_target(def.attributes, target)
       {
-        Public, True, True -> Ok(parse_function(func))
-        Private, _, _ | Public, False, _ | Public, _, False -> Error(Nil)
+        glance.Public, True, True -> Ok(parse_function(func))
+        glance.Private, _, _ | glance.Public, False, _ | glance.Public, _, False
+        -> Error(Nil)
       }
     })
 
@@ -120,7 +119,7 @@ fn is_available_for_target(attributes: List(Attribute), target: String) -> Bool 
 
 fn matches_target(attr: Attribute, target: String) -> Bool {
   case attr.arguments {
-    [Variable(name: attr_target, ..)] -> attr_target == target
+    [glance.Variable(name: attr_target, ..)] -> attr_target == target
     _ -> True
   }
 }
@@ -146,8 +145,8 @@ fn extract_tags_from_body(statements: List(Statement)) -> List(String) {
 
 fn extract_tags_from_statement(stmt: Statement) -> List(String) {
   case stmt {
-    Use(function: func, ..) -> extract_tags_from_expr(func)
-    ExprStatement(expr) -> extract_tags_from_expr(expr)
+    glance.Use(function: func, ..) -> extract_tags_from_expr(func)
+    glance.Expression(expr) -> extract_tags_from_expr(expr)
     _ -> []
   }
 }
@@ -155,9 +154,9 @@ fn extract_tags_from_statement(stmt: Statement) -> List(String) {
 fn extract_tags_from_expr(expr: Expression) -> List(String) {
   case expr {
     // unitest.tag("slow")
-    Call(
-      function: FieldAccess(
-        container: Variable(name: "unitest", ..),
+    glance.Call(
+      function: glance.FieldAccess(
+        container: glance.Variable(name: "unitest", ..),
         label: "tag",
         ..,
       ),
@@ -166,9 +165,9 @@ fn extract_tags_from_expr(expr: Expression) -> List(String) {
     ) -> extract_single_tag(args)
 
     // unitest.tags(["slow", "db"])
-    Call(
-      function: FieldAccess(
-        container: Variable(name: "unitest", ..),
+    glance.Call(
+      function: glance.FieldAccess(
+        container: glance.Variable(name: "unitest", ..),
         label: "tags",
         ..,
       ),
@@ -182,17 +181,17 @@ fn extract_tags_from_expr(expr: Expression) -> List(String) {
 
 fn extract_single_tag(args: List(glance.Field(Expression))) -> List(String) {
   case args {
-    [UnlabelledField(StringExpr(value: tag, ..))] -> [tag]
+    [glance.UnlabelledField(glance.String(value: tag, ..))] -> [tag]
     _ -> []
   }
 }
 
 fn extract_tags_list(args: List(glance.Field(Expression))) -> List(String) {
   case args {
-    [UnlabelledField(ListExpr(elements: elements, ..))] ->
+    [glance.UnlabelledField(glance.List(elements: elements, ..))] ->
       list.filter_map(elements, fn(elem) {
         case elem {
-          StringExpr(value: tag, ..) -> Ok(tag)
+          glance.String(value: tag, ..) -> Ok(tag)
           _ -> Error(Nil)
         }
       })

@@ -4,10 +4,8 @@ import gleam/order
 import gleam/string
 import gleam_community/ansi
 import tobble
-import unitest/internal/cli.{type SortOrder, NameSort, NativeSort, TimeSort}
-import unitest/internal/runner.{
-  type TestResult, Failed, Passed, Skipped, TestResult,
-}
+import unitest/internal/cli.{type SortOrder}
+import unitest/internal/runner.{type TestResult}
 
 pub fn render_table(
   results: List(TestResult),
@@ -28,7 +26,7 @@ pub fn render_table(
 
   let builder =
     list.fold(sorted_results, builder, fn(b, result) {
-      let TestResult(item: t, outcome:, duration_ms:) = result
+      let runner.TestResult(item: t, outcome:, duration_ms:) = result
       let status = format_status(outcome, use_color)
       let duration = format_duration(outcome, duration_ms)
       tobble.add_row(b, [status, t.module, t.name, duration])
@@ -49,19 +47,19 @@ fn header(text: String, use_color: Bool) -> String {
 
 fn format_status(outcome: runner.Outcome, use_color: Bool) -> String {
   case outcome, use_color {
-    Passed, True -> ansi.green("✓")
-    Passed, False -> "PASS"
-    Failed(_), True -> ansi.red("✗")
-    Failed(_), False -> "FAIL"
-    Skipped, True -> ansi.yellow("S")
-    Skipped, False -> "SKIP"
+    runner.Passed, True -> ansi.green("✓")
+    runner.Passed, False -> "PASS"
+    runner.Failed(_), True -> ansi.red("✗")
+    runner.Failed(_), False -> "FAIL"
+    runner.Skipped, True -> ansi.yellow("S")
+    runner.Skipped, False -> "SKIP"
   }
 }
 
 fn format_duration(outcome: runner.Outcome, duration_ms: Int) -> String {
   case outcome {
-    Skipped -> "-"
-    Passed | Failed(_) -> int.to_string(duration_ms) <> "ms"
+    runner.Skipped -> "-"
+    runner.Passed | runner.Failed(_) -> int.to_string(duration_ms) <> "ms"
   }
 }
 
@@ -71,12 +69,13 @@ fn sort_results(
   sort_reversed: Bool,
 ) -> List(TestResult) {
   case sort_order, sort_reversed {
-    NativeSort, False -> results
-    NativeSort, True -> list.reverse(results)
-    TimeSort, reversed ->
+    cli.NativeSort, False -> results
+    cli.NativeSort, True -> list.reverse(results)
+    cli.TimeSort, reversed ->
       list.sort(results, fn(a, b) { compare_by_time(a, b, reversed) })
-    NameSort, False -> list.sort(results, fn(a, b) { compare_by_name(a, b) })
-    NameSort, True -> list.sort(results, fn(a, b) { compare_by_name(b, a) })
+    cli.NameSort, False ->
+      list.sort(results, fn(a, b) { compare_by_name(a, b) })
+    cli.NameSort, True -> list.sort(results, fn(a, b) { compare_by_name(b, a) })
   }
 }
 
@@ -87,13 +86,13 @@ fn compare_by_name(a: TestResult, b: TestResult) -> order.Order {
 
 fn compare_by_time(a: TestResult, b: TestResult, reversed: Bool) -> order.Order {
   case a.outcome, b.outcome {
-    Skipped, Skipped -> order.Eq
-    Skipped, Passed | Skipped, Failed(_) -> order.Gt
-    Passed, Skipped | Failed(_), Skipped -> order.Lt
-    Passed, Passed
-    | Passed, Failed(_)
-    | Failed(_), Passed
-    | Failed(_), Failed(_)
+    runner.Skipped, runner.Skipped -> order.Eq
+    runner.Skipped, runner.Passed | runner.Skipped, runner.Failed(_) -> order.Gt
+    runner.Passed, runner.Skipped | runner.Failed(_), runner.Skipped -> order.Lt
+    runner.Passed, runner.Passed
+    | runner.Passed, runner.Failed(_)
+    | runner.Failed(_), runner.Passed
+    | runner.Failed(_), runner.Failed(_)
     ->
       case reversed {
         False -> int.compare(b.duration_ms, a.duration_ms)

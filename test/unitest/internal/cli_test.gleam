@@ -1,16 +1,16 @@
-import gleam/option.{None, Some}
+import gleam/option
 import gleam/string
 import unitest/internal/cli
 
 fn default_opts() -> cli.CliOptions {
   cli.CliOptions(
-    seed: None,
-    filter: cli.Filter(location: cli.AllLocations, tag: None),
+    seed: option.None,
+    filter: cli.Filter(location: cli.AllLocations, tag: option.None),
     no_color: False,
     reporter: cli.DotReporter,
-    sort_order: None,
+    sort_order: option.None,
     sort_reversed: False,
-    workers: None,
+    workers: option.None,
   )
 }
 
@@ -21,7 +21,7 @@ pub fn parse_empty_args_test() {
 
 pub fn parse_seed_test() {
   let result = cli.parse(["--seed", "123"])
-  assert result == Ok(cli.CliOptions(..default_opts(), seed: Some(123)))
+  assert result == Ok(cli.CliOptions(..default_opts(), seed: option.Some(123)))
 }
 
 pub fn parse_test_filter_test() {
@@ -29,7 +29,7 @@ pub fn parse_test_filter_test() {
   let filter =
     cli.Filter(
       location: cli.OnlyTest(module: "foo/bar_test", name: "some_test"),
-      tag: None,
+      tag: option.None,
     )
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
@@ -37,13 +37,13 @@ pub fn parse_test_filter_test() {
 pub fn parse_module_filter_test() {
   let result = cli.parse(["--module", "foo/bar_test"])
   let filter =
-    cli.Filter(location: cli.OnlyFile("foo/bar_test.gleam"), tag: None)
+    cli.Filter(location: cli.OnlyFile("foo/bar_test.gleam"), tag: option.None)
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn parse_tag_filter_test() {
   let result = cli.parse(["--tag", "slow"])
-  let filter = cli.Filter(location: cli.AllLocations, tag: Some("slow"))
+  let filter = cli.Filter(location: cli.AllLocations, tag: option.Some("slow"))
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
@@ -53,7 +53,7 @@ pub fn test_takes_precedence_over_module_test() {
   let filter =
     cli.Filter(
       location: cli.OnlyTest(module: "foo", name: "bar_test"),
-      tag: Some("slow"),
+      tag: option.Some("slow"),
     )
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
@@ -61,14 +61,15 @@ pub fn test_takes_precedence_over_module_test() {
 pub fn module_and_tag_combined_test() {
   let result = cli.parse(["--module", "foo", "--tag", "slow"])
   let filter =
-    cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: Some("slow"))
+    cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: option.Some("slow"))
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn seed_combined_with_filter_test() {
   let result = cli.parse(["--seed", "42", "--tag", "slow"])
-  let filter = cli.Filter(location: cli.AllLocations, tag: Some("slow"))
-  assert result == Ok(cli.CliOptions(..default_opts(), seed: Some(42), filter:))
+  let filter = cli.Filter(location: cli.AllLocations, tag: option.Some("slow"))
+  assert result
+    == Ok(cli.CliOptions(..default_opts(), seed: option.Some(42), filter:))
 }
 
 pub fn parse_no_color_flag_test() {
@@ -119,7 +120,7 @@ pub fn parse_invalid_test_filter_dot_only_test() {
 pub fn parse_file_positional_arg_test() {
   let result = cli.parse(["test/foo_test.gleam"])
   let filter =
-    cli.Filter(location: cli.OnlyFile("test/foo_test.gleam"), tag: None)
+    cli.Filter(location: cli.OnlyFile("test/foo_test.gleam"), tag: option.None)
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
@@ -128,7 +129,7 @@ pub fn parse_file_with_line_positional_test() {
   let filter =
     cli.Filter(
       location: cli.OnlyFileAtLine(path: "test/foo_test.gleam", line: 42),
-      tag: None,
+      tag: option.None,
     )
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
@@ -138,7 +139,7 @@ pub fn parse_file_relative_path_test() {
   let filter =
     cli.Filter(
       location: cli.OnlyFileAtLine(path: "foo_test.gleam", line: 10),
-      tag: None,
+      tag: option.None,
     )
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
@@ -172,28 +173,33 @@ pub fn test_takes_precedence_over_positional_file_test() {
   let filter =
     cli.Filter(
       location: cli.OnlyTest(module: "foo", name: "bar_test"),
-      tag: None,
+      tag: option.None,
     )
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn positional_file_takes_precedence_over_module_test() {
   let result = cli.parse(["foo.gleam", "--module", "bar"])
-  let filter = cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: None)
+  let filter = cli.Filter(location: cli.OnlyFile("foo.gleam"), tag: option.None)
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn file_and_tag_combined_test() {
   let result = cli.parse(["test/foo.gleam", "--tag", "slow"])
   let filter =
-    cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: Some("slow"))
+    cli.Filter(
+      location: cli.OnlyFile("test/foo.gleam"),
+      tag: option.Some("slow"),
+    )
   assert result == Ok(cli.CliOptions(..default_opts(), filter:))
 }
 
 pub fn file_with_seed_test() {
   let result = cli.parse(["test/foo.gleam", "--seed", "42"])
-  let filter = cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: None)
-  assert result == Ok(cli.CliOptions(..default_opts(), seed: Some(42), filter:))
+  let filter =
+    cli.Filter(location: cli.OnlyFile("test/foo.gleam"), tag: option.None)
+  assert result
+    == Ok(cli.CliOptions(..default_opts(), seed: option.Some(42), filter:))
 }
 
 pub fn parse_reporter_table_test() {
@@ -205,18 +211,22 @@ pub fn parse_reporter_table_test() {
 pub fn parse_sort_time_test() {
   let result = cli.parse(["--sort", "time"])
   assert result
-    == Ok(cli.CliOptions(..default_opts(), sort_order: Some(cli.TimeSort)))
+    == Ok(
+      cli.CliOptions(..default_opts(), sort_order: option.Some(cli.TimeSort)),
+    )
 }
 
 pub fn parse_sort_name_test() {
   let result = cli.parse(["--sort", "name"])
   assert result
-    == Ok(cli.CliOptions(..default_opts(), sort_order: Some(cli.NameSort)))
+    == Ok(
+      cli.CliOptions(..default_opts(), sort_order: option.Some(cli.NameSort)),
+    )
 }
 
 pub fn parse_workers_test() {
   let result = cli.parse(["--workers", "4"])
-  assert result == Ok(cli.CliOptions(..default_opts(), workers: Some(4)))
+  assert result == Ok(cli.CliOptions(..default_opts(), workers: option.Some(4)))
 }
 
 pub fn parse_workers_must_be_positive_test() {
