@@ -5,9 +5,7 @@ import gleam/option
 import gleam/string
 import gleam/time/duration
 import gleam_community/ansi
-import unitest/internal/cli.{
-  type CliOptions, type Filter, AllLocations, OnlyFile, OnlyFileAtLine, OnlyTest,
-}
+import unitest/internal/cli.{type CliOptions, type Filter}
 import unitest/internal/discover.{type LineSpan, type Test}
 import unitest/internal/test_failure.{type TestFailure}
 
@@ -109,10 +107,10 @@ pub fn plan(
 
 fn should_include(t: Test, filter: Filter) -> Bool {
   let location_match = case filter.location {
-    AllLocations -> True
-    OnlyTest(module, name) -> t.module == module && t.name == name
-    OnlyFile(path) -> path_matches(t.file_path, path)
-    OnlyFileAtLine(path, line) ->
+    cli.AllLocations -> True
+    cli.OnlyTest(module, name) -> t.module == module && t.name == name
+    cli.OnlyFile(path) -> path_matches(t.file_path, path)
+    cli.OnlyFileAtLine(path, line) ->
       path_matches(t.file_path, path) && line_in_span(line, t.line_span)
   }
 
@@ -138,10 +136,10 @@ fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem
 
   let should_skip = case filter.tag, filter.location {
     option.Some(_), _ -> False
-    _, OnlyTest(_, _) -> False
-    _, OnlyFileAtLine(_, _) -> False
-    option.None, AllLocations -> has_ignored_tag
-    option.None, OnlyFile(_) -> has_ignored_tag
+    _, cli.OnlyTest(_, _) -> False
+    _, cli.OnlyFileAtLine(_, _) -> False
+    option.None, cli.AllLocations -> has_ignored_tag
+    option.None, cli.OnlyFile(_) -> has_ignored_tag
   }
 
   case should_skip {

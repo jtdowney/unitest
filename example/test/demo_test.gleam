@@ -5,14 +5,14 @@
 
 import demo
 import gleam/list
-import unitest.{Options}
+import unitest
 
 pub fn main() {
   // Skip "slow" and "failure_demo" tagged tests by default
   // Run failure demos with: gleam test -- --tag failure_demo
   // Enable check_results so Error results are treated as failures
   unitest.run(
-    Options(
+    unitest.Options(
       ..unitest.default_options(),
       ignored_tags: ["slow", "failure_demo"],
       check_results: True,

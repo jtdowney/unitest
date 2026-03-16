@@ -1,8 +1,8 @@
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option
 import unitest
 import unitest/internal/cli
-import unitest/internal/runner.{Report}
+import unitest/internal/runner
 
 pub fn main() -> Nil {
   unitest.main()
@@ -10,7 +10,7 @@ pub fn main() -> Nil {
 
 pub fn exit_code_zero_when_no_failures_test() {
   let report =
-    Report(
+    runner.Report(
       passed: 5,
       failed: 0,
       skipped: 1,
@@ -23,7 +23,7 @@ pub fn exit_code_zero_when_no_failures_test() {
 
 pub fn exit_code_one_when_failures_test() {
   let report =
-    Report(
+    runner.Report(
       passed: 4,
       failed: 1,
       skipped: 0,
@@ -65,7 +65,7 @@ pub fn parse_package_name_empty_content_returns_error_test() {
 
 pub fn default_options_returns_expected_defaults_test() {
   let opts = unitest.default_options()
-  assert opts.seed == None
+  assert opts.seed == option.None
   assert list.is_empty(opts.ignored_tags)
   assert opts.test_directory == "test"
   assert opts.sort_order == cli.NativeSort
@@ -75,27 +75,35 @@ pub fn default_options_returns_expected_defaults_test() {
 }
 
 pub fn resolve_execution_mode_cli_workers_override_test() {
-  assert unitest.resolve_execution_mode(Some(8), unitest.RunSequential, 16)
+  assert unitest.resolve_execution_mode(
+      option.Some(8),
+      unitest.RunSequential,
+      16,
+    )
     == unitest.ResolvedParallel(8)
 }
 
 pub fn resolve_execution_mode_uses_option_mode_test() {
-  assert unitest.resolve_execution_mode(None, unitest.RunAsync, 16)
+  assert unitest.resolve_execution_mode(option.None, unitest.RunAsync, 16)
     == unitest.ResolvedAsync
 }
 
 pub fn resolve_execution_mode_auto_resolves_to_parallel_test() {
-  assert unitest.resolve_execution_mode(None, unitest.RunParallelAuto, 12)
+  assert unitest.resolve_execution_mode(
+      option.None,
+      unitest.RunParallelAuto,
+      12,
+    )
     == unitest.ResolvedParallel(12)
 }
 
 pub fn resolve_execution_mode_sequential_passthrough_test() {
-  assert unitest.resolve_execution_mode(None, unitest.RunSequential, 16)
+  assert unitest.resolve_execution_mode(option.None, unitest.RunSequential, 16)
     == unitest.ResolvedSequential
 }
 
 pub fn resolve_execution_mode_parallel_passthrough_test() {
-  assert unitest.resolve_execution_mode(None, unitest.RunParallel(4), 16)
+  assert unitest.resolve_execution_mode(option.None, unitest.RunParallel(4), 16)
     == unitest.ResolvedParallel(4)
 }
 
@@ -110,7 +118,7 @@ pub fn apply_parallel_threshold_below_downgrades_to_async_test() {
       unitest.ResolvedParallel(4),
       10,
       unitest.RunParallelAuto,
-      None,
+      option.None,
     )
     == unitest.ResolvedAsync
 }
@@ -120,7 +128,7 @@ pub fn apply_parallel_threshold_above_keeps_parallel_test() {
       unitest.ResolvedParallel(4),
       100,
       unitest.RunParallelAuto,
-      None,
+      option.None,
     )
     == unitest.ResolvedParallel(4)
 }
@@ -130,7 +138,7 @@ pub fn apply_parallel_threshold_sequential_unaffected_test() {
       unitest.ResolvedSequential,
       10,
       unitest.RunParallelAuto,
-      None,
+      option.None,
     )
     == unitest.ResolvedSequential
 }
@@ -140,7 +148,7 @@ pub fn apply_parallel_threshold_async_unaffected_test() {
       unitest.ResolvedAsync,
       10,
       unitest.RunParallelAuto,
-      None,
+      option.None,
     )
     == unitest.ResolvedAsync
 }
@@ -150,7 +158,7 @@ pub fn apply_parallel_threshold_explicit_parallel_bypasses_threshold_test() {
       unitest.ResolvedParallel(4),
       10,
       unitest.RunParallel(4),
-      None,
+      option.None,
     )
     == unitest.ResolvedParallel(4)
 }
@@ -160,7 +168,7 @@ pub fn apply_parallel_threshold_cli_workers_prevents_downgrade_test() {
       unitest.ResolvedParallel(4),
       10,
       unitest.RunParallelAuto,
-      Some(4),
+      option.Some(4),
     )
     == unitest.ResolvedParallel(4)
 }

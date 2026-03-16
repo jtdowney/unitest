@@ -2,7 +2,7 @@ import gleam/bit_array
 import gleam/bool
 import gleam/int
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option}
 import gleam/result
 import gleam/string
 import gleam_community/ansi
@@ -68,7 +68,7 @@ pub fn format_failure(
   let location = format_location(error.file, error.line, use_color)
 
   let #(snippet, values) = case error.kind, source {
-    Assert(kind: assert_kind, ..), Some(code) ->
+    Assert(kind: assert_kind, ..), option.Some(code) ->
       format_assertion_with_labels(code, assert_kind, use_color)
     _, _ -> #(
       format_snippet(source, use_color),
@@ -111,8 +111,8 @@ fn format_location(file: String, line: Int, use_color: Bool) -> String {
 
 fn format_snippet(source: Option(String), use_color: Bool) -> String {
   case source {
-    None -> ""
-    Some(code) -> {
+    option.None -> ""
+    option.Some(code) -> {
       let text = "\n     " <> code
       maybe_color(text, use_color, ansi.cyan)
     }

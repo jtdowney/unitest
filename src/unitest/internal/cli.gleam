@@ -4,7 +4,7 @@ import clip/flag
 import clip/help
 import clip/opt
 import gleam/int
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option}
 import gleam/result
 import gleam/string
 
@@ -172,10 +172,10 @@ fn parse_sort_order(
   sort_result: Result(String, Nil),
 ) -> Result(Option(SortOrder), String) {
   case sort_result {
-    Error(Nil) -> Ok(None)
-    Ok("native") -> Ok(Some(NativeSort))
-    Ok("time") -> Ok(Some(TimeSort))
-    Ok("name") -> Ok(Some(NameSort))
+    Error(Nil) -> Ok(option.None)
+    Ok("native") -> Ok(option.Some(NativeSort))
+    Ok("time") -> Ok(option.Some(TimeSort))
+    Ok("name") -> Ok(option.Some(NameSort))
     Ok(other) ->
       Error(
         "Invalid sort order: '" <> other <> "'. Use 'native', 'time', or 'name'",
@@ -185,7 +185,7 @@ fn parse_sort_order(
 
 fn validate_workers(workers: Option(Int)) -> Result(Option(Int), String) {
   case workers {
-    Some(n) if n <= 0 -> Error("Workers must be positive")
+    option.Some(n) if n <= 0 -> Error("Workers must be positive")
     _ -> Ok(workers)
   }
 }

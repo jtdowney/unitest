@@ -11,7 +11,7 @@ import gleam/bool
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option}
 import gleam/order
 import gleam/result
 import gleam/string
@@ -19,9 +19,7 @@ import gleam_community/ansi
 import prng/random
 import simplifile
 import spinner
-import unitest/internal/cli.{
-  type Reporter, type SortOrder, DotReporter, TableReporter,
-}
+import unitest/internal/cli.{type Reporter, type SortOrder}
 import unitest/internal/discover.{type Test}
 import unitest/internal/format_table
 import unitest/internal/runner.{
@@ -98,7 +96,7 @@ pub type Options {
 /// Returns default options with no seed and no ignored tags.
 pub fn default_options() -> Options {
   Options(
-    seed: None,
+    seed: option.None,
     ignored_tags: [],
     test_directory: "test",
     sort_order: cli.NativeSort,
@@ -225,8 +223,8 @@ pub fn resolve_execution_mode(
   runtime_default: Int,
 ) -> ResolvedExecutionMode {
   case cli_workers {
-    Some(n) -> ResolvedParallel(n)
-    None ->
+    option.Some(n) -> ResolvedParallel(n)
+    option.None ->
       case option_mode {
         RunSequential -> ResolvedSequential
         RunAsync -> ResolvedAsync
@@ -396,7 +394,7 @@ fn build_on_result_callback(
   sort_reversed: Bool,
 ) -> #(OnResultCallback, CleanupCallback) {
   case reporter {
-    DotReporter -> {
+    cli.DotReporter -> {
       let on_result = fn(result: TestResult, _progress: Progress, continue) {
         io.print(runner.outcome_char(result.outcome, use_color))
         continue()
@@ -404,7 +402,7 @@ fn build_on_result_callback(
       let cleanup = fn(_: runner.ExecuteResult) { Nil }
       #(on_result, cleanup)
     }
-    TableReporter -> {
+    cli.TableReporter -> {
       let progress_spinner =
         spinner.new("Running tests...")
         |> spinner.with_colour(ansi.cyan)
