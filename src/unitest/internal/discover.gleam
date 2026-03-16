@@ -1,7 +1,7 @@
 import glance.{
   type Attribute, type Expression, type Function, type Span, type Statement,
-  Call, Expression as ExprStatement, FieldAccess, List as ListExpr, Public,
-  String as StringExpr, UnlabelledField, Use, Variable,
+  Call, Expression as ExprStatement, FieldAccess, List as ListExpr, Private,
+  Public, String as StringExpr, UnlabelledField, Use, Variable,
 }
 import gleam/bit_array
 import gleam/list
@@ -102,7 +102,7 @@ pub fn parse_module_for_target(
         is_available_for_target(def.attributes, target)
       {
         Public, True, True -> Ok(parse_function(func))
-        _, _, _ -> Error(Nil)
+        Private, _, _ | Public, False, _ | Public, _, False -> Error(Nil)
       }
     })
 
