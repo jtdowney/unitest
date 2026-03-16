@@ -499,7 +499,7 @@ fn get_package_name() -> String {
   case name_result {
     Ok(name) -> name
     Error(error) -> {
-      io.println_error("Error: " <> error)
+      io.println_error(error)
       halt(1)
       ""
     }
