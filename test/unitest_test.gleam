@@ -8,6 +8,18 @@ pub fn main() -> Nil {
   unitest.main()
 }
 
+fn default_cli_opts() -> cli.CliOptions {
+  cli.CliOptions(
+    seed: option.None,
+    filter: cli.Filter(location: cli.AllLocations, tag: option.None),
+    no_color: False,
+    reporter: cli.DotReporter,
+    sort_order: option.None,
+    sort_reversed: False,
+    workers: option.None,
+  )
+}
+
 pub fn exit_code_zero_when_no_failures_test() {
   let report =
     runner.Report(
@@ -61,6 +73,41 @@ pub fn parse_package_name_malformed_line_returns_error_test() {
 
 pub fn parse_package_name_empty_content_returns_error_test() {
   assert unitest.parse_package_name("") == Error(Nil)
+}
+
+pub fn resolve_package_name_returns_name_for_valid_content_test() {
+  assert unitest.resolve_package_name(Ok(
+      "name = \"unitest\"\nversion = \"1.0.0\"",
+    ))
+    == Ok("unitest")
+}
+
+pub fn resolve_package_name_returns_read_error_test() {
+  assert unitest.resolve_package_name(Error(Nil))
+    == Error("Error: Could not read gleam.toml")
+}
+
+pub fn resolve_package_name_returns_parse_error_test() {
+  assert unitest.resolve_package_name(Ok("version = \"1.0.0\""))
+    == Error("Error: Could not find 'name' in gleam.toml")
+}
+
+pub fn resolve_cli_action_runs_valid_args_test() {
+  assert unitest.resolve_cli_action(["--workers", "4"])
+    == unitest.RunWithCliOptions(
+      cli.CliOptions(..default_cli_opts(), workers: option.Some(4)),
+    )
+}
+
+pub fn resolve_cli_action_marks_validation_errors_fatal_test() {
+  assert unitest.resolve_cli_action(["--workers", "0"])
+    == unitest.ShowCliMessage(message: "Workers must be positive", exit_code: 1)
+}
+
+pub fn resolve_cli_action_keeps_help_non_fatal_test() {
+  let assert Error(help_text) = cli.parse(["--help"])
+  assert unitest.resolve_cli_action(["--help"])
+    == unitest.ShowCliMessage(message: help_text, exit_code: 0)
 }
 
 pub fn default_options_returns_expected_defaults_test() {

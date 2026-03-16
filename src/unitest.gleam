@@ -51,6 +51,12 @@ pub type ResolvedExecutionMode {
   ResolvedParallel(workers: Int)
 }
 
+@internal
+pub type CliAction {
+  RunWithCliOptions(cli.CliOptions)
+  ShowCliMessage(message: String, exit_code: Int)
+}
+
 /// Configuration options for the test runner.
 ///
 /// ## Fields
@@ -239,10 +245,33 @@ pub fn resolve_execution_mode(
 fn default_workers() -> Int
 
 fn run_with_args(args: List(String), options: Options) -> Nil {
-  case cli.parse(args) {
-    Error(help) -> io.println(help)
-    Ok(cli_opts) -> run_with_cli_opts(cli_opts, options)
+  case resolve_cli_action(args) {
+    RunWithCliOptions(cli_opts) -> run_with_cli_opts(cli_opts, options)
+    ShowCliMessage(message, exit_code) -> {
+      io.println_error(message)
+
+      case exit_code {
+        0 -> Nil
+        _ -> halt(exit_code)
+      }
+    }
   }
+}
+
+@internal
+pub fn resolve_cli_action(args: List(String)) -> CliAction {
+  case cli.parse(args) {
+    Ok(cli_opts) -> RunWithCliOptions(cli_opts)
+    Error(message) ->
+      case wants_help(args) {
+        True -> ShowCliMessage(message, 0)
+        False -> ShowCliMessage(message, 1)
+      }
+  }
+}
+
+fn wants_help(args: List(String)) -> Bool {
+  list.contains(args, "--help") || list.contains(args, "-h")
 }
 
 fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
@@ -338,46 +367,61 @@ fn execute_and_finish(
   sort_reversed: Bool,
   check_results: Bool,
 ) -> Nil {
-  let package_name = get_package_name()
-  let platform =
-    runner.Platform(
-      now_ms: now_ms,
-      run_test: fn(t, k) { run_test_async(t, package_name, check_results, k) },
-      start_module_pool: fn(module_groups, pool_workers) {
-        start_module_pool(
-          module_groups,
-          package_name,
-          check_results,
-          pool_workers,
+  case get_package_name() {
+    Error(error) -> {
+      io.println_error(error)
+      halt(1)
+    }
+    Ok(package_name) -> {
+      let platform =
+        runner.Platform(
+          now_ms: now_ms,
+          run_test: fn(t, k) {
+            run_test_async(t, package_name, check_results, k)
+          },
+          start_module_pool: fn(module_groups, pool_workers) {
+            start_module_pool(
+              module_groups,
+              package_name,
+              check_results,
+              pool_workers,
+            )
+          },
+          receive_pool_result: receive_pool_result,
+          print: io.print,
         )
-      },
-      receive_pool_result: receive_pool_result,
-      print: io.print,
-    )
 
-  let #(on_result, cleanup) =
-    build_on_result_callback(reporter, use_color, sort_order, sort_reversed)
+      let #(on_result, cleanup) =
+        build_on_result_callback(reporter, use_color, sort_order, sort_reversed)
 
-  let on_complete = fn(exec_result: runner.ExecuteResult) {
-    cleanup(exec_result)
-    io.println(runner.render_summary(exec_result.report, use_color))
-    halt(exit_code(exec_result.report))
-  }
+      let on_complete = fn(exec_result: runner.ExecuteResult) {
+        cleanup(exec_result)
+        io.println(runner.render_summary(exec_result.report, use_color))
+        halt(exit_code(exec_result.report))
+      }
 
-  case mode {
-    ResolvedSequential ->
-      runner.execute_sequential(plan, seed, platform, on_result, on_complete)
-    ResolvedAsync ->
-      runner.execute_pooled(plan, seed, 1, platform, on_result, on_complete)
-    ResolvedParallel(workers) ->
-      runner.execute_pooled(
-        plan,
-        seed,
-        workers,
-        platform,
-        on_result,
-        on_complete,
-      )
+      case mode {
+        ResolvedSequential ->
+          runner.execute_sequential(
+            plan,
+            seed,
+            platform,
+            on_result,
+            on_complete,
+          )
+        ResolvedAsync ->
+          runner.execute_pooled(plan, seed, 1, platform, on_result, on_complete)
+        ResolvedParallel(workers) ->
+          runner.execute_pooled(
+            plan,
+            seed,
+            workers,
+            platform,
+            on_result,
+            on_complete,
+          )
+      }
+    }
   }
 }
 
@@ -488,22 +532,9 @@ fn yield_then(next: fn() -> Nil) -> Nil
 @external(javascript, "./unitest_ffi.mjs", "halt")
 fn halt(code: Int) -> Nil
 
-fn get_package_name() -> String {
-  let name_result = case simplifile.read("gleam.toml") {
-    Ok(content) ->
-      parse_package_name(content)
-      |> result.replace_error("Error: Could not find 'name' in gleam.toml")
-    Error(_) -> Error("Error: Could not read gleam.toml")
-  }
-
-  case name_result {
-    Ok(name) -> name
-    Error(error) -> {
-      io.println_error(error)
-      halt(1)
-      ""
-    }
-  }
+fn get_package_name() -> Result(String, String) {
+  simplifile.read("gleam.toml")
+  |> resolve_package_name
 }
 
 @internal
@@ -521,4 +552,16 @@ pub fn parse_package_name(content: String) -> Result(String, Nil) {
         }
     }
   })
+}
+
+@internal
+pub fn resolve_package_name(
+  toml_result: Result(String, a),
+) -> Result(String, String) {
+  case toml_result {
+    Ok(content) ->
+      parse_package_name(content)
+      |> result.replace_error("Error: Could not find 'name' in gleam.toml")
+    Error(_) -> Error("Error: Could not read gleam.toml")
+  }
 }
