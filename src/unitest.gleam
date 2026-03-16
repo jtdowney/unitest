@@ -491,13 +491,11 @@ fn yield_then(next: fn() -> Nil) -> Nil
 fn halt(code: Int) -> Nil
 
 fn get_package_name() -> String {
-  let name_result = {
-    use content <- result.try(
-      simplifile.read("gleam.toml")
-      |> result.replace_error("Error: Could not read gleam.toml"),
-    )
-    parse_package_name(content)
-    |> result.replace_error("Error: Could not find 'name' in gleam.toml")
+  let name_result = case simplifile.read("gleam.toml") {
+    Ok(content) ->
+      parse_package_name(content)
+      |> result.replace_error("Error: Could not find 'name' in gleam.toml")
+    Error(_) -> Error("Error: Could not read gleam.toml")
   }
 
   case name_result {

@@ -259,13 +259,12 @@ pub fn extract_snippet(
   use <- bool.guard(start <= 0 || end <= start, Error(Nil))
   let length = end - start
 
-  {
-    use content <- result.try(
-      simplifile.read_bits(file) |> result.replace_error(Nil),
-    )
-    use snippet_bits <- result.try(slice_bits(content, start, length))
-    bit_array.to_string(snippet_bits) |> result.replace_error(Nil)
-  }
+  use content <- result.try(
+    simplifile.read_bits(file) |> result.replace_error(Nil),
+  )
+  use snippet_bits <- result.try(slice_bits(content, start, length))
+  bit_array.to_string(snippet_bits)
+  |> result.replace_error(Nil)
   |> result.map(string.trim)
 }
 
