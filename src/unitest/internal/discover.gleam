@@ -88,11 +88,9 @@ pub fn parse_module_for_target(
   source: String,
   target: String,
 ) -> Result(List(ParsedTest), glance.Error) {
-  use module <- result.try(glance.module(source))
-
-  let tests =
-    module.functions
-    |> list.filter_map(fn(def) {
+  glance.module(source)
+  |> result.map(fn(module) {
+    list.filter_map(module.functions, fn(def) {
       let func = def.definition
       case
         func.publicity,
@@ -104,8 +102,7 @@ pub fn parse_module_for_target(
         -> Error(Nil)
       }
     })
-
-  Ok(tests)
+  })
 }
 
 fn is_available_for_target(attributes: List(Attribute), target: String) -> Bool {

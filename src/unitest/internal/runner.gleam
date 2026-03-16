@@ -327,26 +327,22 @@ fn process_run_result(
     RunError(err) -> Failed(err)
   }
   let test_result = TestResult(item: t, outcome:, duration_ms: duration)
+  let base =
+    ExecutionState(
+      ..state,
+      results: [test_result, ..state.results],
+      idx: state.idx + 1,
+    )
   let new_state = case outcome {
-    Passed ->
-      ExecutionState(..state, passed: state.passed + 1, idx: state.idx + 1)
-    Skipped ->
-      ExecutionState(..state, skipped: state.skipped + 1, idx: state.idx + 1)
+    Passed -> ExecutionState(..base, passed: state.passed + 1)
+    Skipped -> ExecutionState(..base, skipped: state.skipped + 1)
     Failed(error) ->
-      ExecutionState(
-        ..state,
-        failed: state.failed + 1,
-        failures: [
-          FailureRecord(item: t, error:, duration_ms: duration),
-          ..state.failures
-        ],
-        idx: state.idx + 1,
-      )
+      ExecutionState(..base, failed: state.failed + 1, failures: [
+        FailureRecord(item: t, error:, duration_ms: duration),
+        ..state.failures
+      ])
   }
-  #(
-    test_result,
-    ExecutionState(..new_state, results: [test_result, ..state.results]),
-  )
+  #(test_result, new_state)
 }
 
 fn build_report(state: ExecutionState, seed: Int, runtime_ms: Int) -> Report {

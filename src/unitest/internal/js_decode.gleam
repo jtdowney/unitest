@@ -17,31 +17,13 @@ pub fn decode_test_run_result(raw: Dynamic) -> TestRunResult {
         use failure <- decode.then(decode_test_failure())
         decode.success(runner.RunError(failure))
       }
-      _ ->
-        decode.success(
-          runner.RunError(test_failure.TestFailure(
-            message: "Unknown result kind",
-            file: "",
-            module: "",
-            function: "",
-            line: 0,
-            kind: test_failure.Generic,
-          )),
-        )
+      _ -> decode.success(make_crash_error("Unknown result kind"))
     }
   }
 
   case decode.run(raw, decoder) {
     Ok(result) -> result
-    Error(_) ->
-      runner.RunError(test_failure.TestFailure(
-        message: "Failed to decode test result",
-        file: "",
-        module: "",
-        function: "",
-        line: 0,
-        kind: test_failure.Generic,
-      ))
+    Error(_) -> make_crash_error("Failed to decode test result")
   }
 }
 
