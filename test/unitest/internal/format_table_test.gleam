@@ -1,11 +1,11 @@
 import birdie
 import unitest/internal/cli
-import unitest/internal/discover.{type Test}
+import unitest/internal/discover
 import unitest/internal/format_table
-import unitest/internal/runner.{type TestResult}
+import unitest/internal/runner
 import unitest/internal/test_failure.{type TestFailure}
 
-fn make_test(module: String, name: String) -> Test {
+fn make_test(module: String, name: String) -> discover.Test {
   discover.Test(
     module: module,
     name: name,
@@ -16,10 +16,10 @@ fn make_test(module: String, name: String) -> Test {
 }
 
 fn make_result(
-  item: Test,
+  item: discover.Test,
   outcome: runner.Outcome,
   duration_ms: Int,
-) -> TestResult {
+) -> runner.TestResult {
   runner.TestResult(item: item, outcome: outcome, duration_ms: duration_ms)
 }
 
@@ -97,7 +97,7 @@ pub fn no_color_mode_test() {
 }
 
 pub fn empty_results_test() {
-  let results: List(TestResult) = []
+  let results: List(runner.TestResult) = []
 
   format_table.render_table(results, False, cli.NativeSort, False)
   |> birdie.snap("empty results table")

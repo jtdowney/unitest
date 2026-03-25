@@ -1,13 +1,10 @@
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
-import unitest/internal/discover.{type Test}
-import unitest/internal/runner.{type PoolResult, type TestRunResult}
-import unitest/internal/test_failure.{
-  type AssertKind, type AssertedExpr, type ExprKind, type PanicKind,
-  type TestFailure,
-}
+import unitest/internal/discover
+import unitest/internal/runner
+import unitest/internal/test_failure.{type TestFailure}
 
-pub fn decode_test_run_result(raw: Dynamic) -> TestRunResult {
+pub fn decode_test_run_result(raw: Dynamic) -> runner.TestRunResult {
   let decoder = {
     use tag <- decode.field("kind", decode.string)
     case tag {
@@ -28,14 +25,14 @@ pub fn decode_test_run_result(raw: Dynamic) -> TestRunResult {
 }
 
 pub fn wrap_pool_result(
-  item: Test,
-  result: TestRunResult,
+  item: discover.Test,
+  result: runner.TestRunResult,
   duration_ms: Int,
-) -> PoolResult {
+) -> runner.PoolResult {
   runner.PoolResult(item:, result:, duration_ms:)
 }
 
-pub fn make_crash_error(message: String) -> TestRunResult {
+pub fn make_crash_error(message: String) -> runner.TestRunResult {
   runner.RunError(test_failure.TestFailure(
     message:,
     file: "",
@@ -67,7 +64,7 @@ fn decode_test_failure() -> decode.Decoder(TestFailure) {
   ))
 }
 
-fn decode_panic_kind_inner() -> decode.Decoder(PanicKind) {
+fn decode_panic_kind_inner() -> decode.Decoder(test_failure.PanicKind) {
   use tag <- decode.field("type", decode.string)
   case tag {
     "assert" -> {
@@ -101,7 +98,7 @@ fn decode_panic_kind_inner() -> decode.Decoder(PanicKind) {
   }
 }
 
-fn decode_assert_kind_inner() -> decode.Decoder(AssertKind) {
+fn decode_assert_kind_inner() -> decode.Decoder(test_failure.AssertKind) {
   let default_expr = test_failure.AssertedExpr(0, 0, test_failure.Unevaluated)
 
   use tag <- decode.field("type", decode.string)
@@ -140,14 +137,14 @@ fn decode_assert_kind_inner() -> decode.Decoder(AssertKind) {
   }
 }
 
-fn decode_asserted_expr_value() -> decode.Decoder(AssertedExpr) {
+fn decode_asserted_expr_value() -> decode.Decoder(test_failure.AssertedExpr) {
   use start <- decode.optional_field("start", 0, decode.int)
   use end <- decode.optional_field("end", 0, decode.int)
   use kind <- decode.then(decode_expr_kind())
   decode.success(test_failure.AssertedExpr(start:, end:, kind:))
 }
 
-fn decode_expr_kind() -> decode.Decoder(ExprKind) {
+fn decode_expr_kind() -> decode.Decoder(test_failure.ExprKind) {
   use tag <- decode.optional_field("kind", "", decode.string)
   case tag {
     "literal" -> {

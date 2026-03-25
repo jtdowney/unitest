@@ -30,8 +30,8 @@ pub type SortOrder {
   NameSort
 }
 
-pub type CliOptions {
-  CliOptions(
+pub type Options {
+  Options(
     seed: Option(Int),
     filter: Filter,
     no_color: Bool,
@@ -42,7 +42,7 @@ pub type CliOptions {
   )
 }
 
-pub fn parse(args: List(String)) -> Result(CliOptions, String) {
+pub fn parse(args: List(String)) -> Result(Options, String) {
   let command =
     clip.command({
       use seed_result <- clip.parameter
@@ -149,7 +149,7 @@ pub fn parse(args: List(String)) -> Result(CliOptions, String) {
   use reporter <- result.try(parse_reporter(reporter_str))
   use sort_order <- result.try(parse_sort_order(sort_str))
   use validated_workers <- result.try(validate_workers(workers))
-  Ok(CliOptions(
+  Ok(Options(
     seed:,
     filter:,
     no_color:,

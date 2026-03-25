@@ -4,13 +4,13 @@ import gleam/order
 import gleam/string
 import gleam_community/ansi
 import tobble
-import unitest/internal/cli.{type SortOrder}
-import unitest/internal/runner.{type TestResult}
+import unitest/internal/cli
+import unitest/internal/runner
 
 pub fn render_table(
-  results: List(TestResult),
+  results: List(runner.TestResult),
   use_color: Bool,
-  sort_order: SortOrder,
+  sort_order: cli.SortOrder,
   sort_reversed: Bool,
 ) -> String {
   let sorted_results = sort_results(results, sort_order, sort_reversed)
@@ -64,10 +64,10 @@ fn format_duration(outcome: runner.Outcome, duration_ms: Int) -> String {
 }
 
 fn sort_results(
-  results: List(TestResult),
-  sort_order: SortOrder,
+  results: List(runner.TestResult),
+  sort_order: cli.SortOrder,
   sort_reversed: Bool,
-) -> List(TestResult) {
+) -> List(runner.TestResult) {
   case sort_order, sort_reversed {
     cli.NativeSort, False -> results
     cli.NativeSort, True -> list.reverse(results)
@@ -79,12 +79,16 @@ fn sort_results(
   }
 }
 
-fn compare_by_name(a: TestResult, b: TestResult) -> order.Order {
+fn compare_by_name(a: runner.TestResult, b: runner.TestResult) -> order.Order {
   string.compare(a.item.module, b.item.module)
   |> order.lazy_break_tie(fn() { string.compare(a.item.name, b.item.name) })
 }
 
-fn compare_by_time(a: TestResult, b: TestResult, reversed: Bool) -> order.Order {
+fn compare_by_time(
+  a: runner.TestResult,
+  b: runner.TestResult,
+  reversed: Bool,
+) -> order.Order {
   case a.outcome, b.outcome {
     runner.Skipped, runner.Skipped -> order.Eq
     runner.Skipped, runner.Passed | runner.Skipped, runner.Failed(_) -> order.Gt

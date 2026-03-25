@@ -19,12 +19,10 @@ import gleam_community/ansi
 import prng/random
 import simplifile
 import spinner
-import unitest/internal/cli.{type Reporter, type SortOrder}
-import unitest/internal/discover.{type Test}
+import unitest/internal/cli
+import unitest/internal/discover
 import unitest/internal/format_table
-import unitest/internal/runner.{
-  type PoolResult, type Progress, type Report, type TestResult,
-}
+import unitest/internal/runner
 
 const yield_every_n_tests = 5
 
@@ -53,7 +51,7 @@ pub type ResolvedExecutionMode {
 
 @internal
 pub type CliAction {
-  RunWithCliOptions(cli.CliOptions)
+  RunWithCliOptions(cli.Options)
   ShowCliMessage(message: String, exit_code: Int)
 }
 
@@ -274,7 +272,7 @@ fn wants_help(args: List(String)) -> Bool {
   list.contains(args, "--help") || list.contains(args, "-h")
 }
 
-fn run_with_cli_opts(cli_opts: cli.CliOptions, options: Options) -> Nil {
+fn run_with_cli_opts(cli_opts: cli.Options, options: Options) -> Nil {
   let use_color = should_use_color(cli_opts.no_color)
   let tests = discover.discover_from_fs(options.test_directory)
 
@@ -362,8 +360,8 @@ fn execute_and_finish(
   seed: Int,
   mode: ResolvedExecutionMode,
   use_color: Bool,
-  reporter: Reporter,
-  sort_order: SortOrder,
+  reporter: cli.Reporter,
+  sort_order: cli.SortOrder,
   sort_reversed: Bool,
   check_results: Bool,
 ) -> Nil {
@@ -426,20 +424,24 @@ fn execute_and_finish(
 }
 
 type OnResultCallback =
-  fn(TestResult, Progress, fn() -> Nil) -> Nil
+  fn(runner.TestResult, runner.Progress, fn() -> Nil) -> Nil
 
 type CleanupCallback =
   fn(runner.ExecuteResult) -> Nil
 
 fn build_on_result_callback(
-  reporter: Reporter,
+  reporter: cli.Reporter,
   use_color: Bool,
-  sort_order: SortOrder,
+  sort_order: cli.SortOrder,
   sort_reversed: Bool,
 ) -> #(OnResultCallback, CleanupCallback) {
   case reporter {
     cli.DotReporter -> {
-      let on_result = fn(result: TestResult, _progress: Progress, continue) {
+      let on_result = fn(
+        result: runner.TestResult,
+        _progress: runner.Progress,
+        continue,
+      ) {
         io.print(runner.outcome_char(result.outcome, use_color))
         continue()
       }
@@ -452,7 +454,11 @@ fn build_on_result_callback(
         |> spinner.with_colour(ansi.cyan)
         |> spinner.start
 
-      let on_result = fn(_result: TestResult, progress: Progress, continue) {
+      let on_result = fn(
+        _result: runner.TestResult,
+        progress: runner.Progress,
+        continue,
+      ) {
         let text =
           "Running tests... "
           <> int.to_string(progress.current)
@@ -482,7 +488,7 @@ fn build_on_result_callback(
 }
 
 @internal
-pub fn exit_code(report: Report) -> Int {
+pub fn exit_code(report: runner.Report) -> Int {
   case report.failed > 0 {
     True -> 1
     False -> 0
@@ -500,7 +506,7 @@ fn now_ms() -> Int
 @external(erlang, "unitest_ffi", "run_test_async")
 @external(javascript, "./unitest_ffi.mjs", "runTestAsync")
 fn run_test_async(
-  t: Test,
+  t: discover.Test,
   package_name: String,
   check_results: Bool,
   k: fn(runner.TestRunResult) -> Nil,
@@ -509,7 +515,7 @@ fn run_test_async(
 @external(erlang, "unitest_ffi", "start_module_pool")
 @external(javascript, "./unitest_ffi.mjs", "startModulePool")
 fn start_module_pool(
-  module_groups: List(List(Test)),
+  module_groups: List(List(discover.Test)),
   package_name: String,
   check_results: Bool,
   workers: Int,
@@ -517,7 +523,7 @@ fn start_module_pool(
 
 @external(erlang, "unitest_ffi", "receive_pool_result")
 @external(javascript, "./unitest_ffi.mjs", "receivePoolResult")
-fn receive_pool_result(callback: fn(PoolResult) -> Nil) -> Nil
+fn receive_pool_result(callback: fn(runner.PoolResult) -> Nil) -> Nil
 
 @target(erlang)
 fn yield_then(next: fn() -> Nil) -> Nil {
