@@ -5,8 +5,8 @@ import gleam/option
 import gleam/string
 import gleam/time/duration
 import gleam_community/ansi
-import unitest/internal/cli.{type CliOptions, type Filter}
-import unitest/internal/discover.{type LineSpan, type Test}
+import unitest/internal/cli
+import unitest/internal/discover
 import unitest/internal/test_failure.{type TestFailure}
 
 pub type TestRunResult {
@@ -16,8 +16,8 @@ pub type TestRunResult {
 }
 
 pub type PlanItem {
-  Run(Test)
-  Skip(Test)
+  Run(discover.Test)
+  Skip(discover.Test)
 }
 
 pub type Outcome {
@@ -27,11 +27,11 @@ pub type Outcome {
 }
 
 pub type TestResult {
-  TestResult(item: Test, outcome: Outcome, duration_ms: Int)
+  TestResult(item: discover.Test, outcome: Outcome, duration_ms: Int)
 }
 
 pub type FailureRecord {
-  FailureRecord(item: Test, error: TestFailure, duration_ms: Int)
+  FailureRecord(item: discover.Test, error: TestFailure, duration_ms: Int)
 }
 
 pub type Report {
@@ -46,14 +46,14 @@ pub type Report {
 }
 
 pub type PoolResult {
-  PoolResult(item: Test, result: TestRunResult, duration_ms: Int)
+  PoolResult(item: discover.Test, result: TestRunResult, duration_ms: Int)
 }
 
 pub type Platform {
   Platform(
     now_ms: fn() -> Int,
-    run_test: fn(Test, fn(TestRunResult) -> Nil) -> Nil,
-    start_module_pool: fn(List(List(Test)), Int) -> Nil,
+    run_test: fn(discover.Test, fn(TestRunResult) -> Nil) -> Nil,
+    start_module_pool: fn(List(List(discover.Test)), Int) -> Nil,
     receive_pool_result: fn(fn(PoolResult) -> Nil) -> Nil,
     print: fn(String) -> Nil,
   )
@@ -93,8 +93,8 @@ fn initial_state() -> ExecutionState {
 }
 
 pub fn plan(
-  tests: List(Test),
-  cli_opts: CliOptions,
+  tests: List(discover.Test),
+  cli_opts: cli.Options,
   ignored_tags: List(String),
 ) -> List(PlanItem) {
   list.filter_map(tests, fn(t) {
@@ -105,7 +105,7 @@ pub fn plan(
   })
 }
 
-fn should_include(t: Test, filter: Filter) -> Bool {
+fn should_include(t: discover.Test, filter: cli.Filter) -> Bool {
   let location_match = case filter.location {
     cli.AllLocations -> True
     cli.OnlyTest(module, name) -> t.module == module && t.name == name
@@ -126,11 +126,15 @@ fn path_matches(test_path: String, filter_path: String) -> Bool {
   test_path == filter_path || string.ends_with(test_path, "/" <> filter_path)
 }
 
-fn line_in_span(line: Int, span: LineSpan) -> Bool {
+fn line_in_span(line: Int, span: discover.LineSpan) -> Bool {
   line >= span.start_line && line <= span.end_line
 }
 
-fn to_plan_item(t: Test, filter: Filter, ignored_tags: List(String)) -> PlanItem {
+fn to_plan_item(
+  t: discover.Test,
+  filter: cli.Filter,
+  ignored_tags: List(String),
+) -> PlanItem {
   let has_ignored_tag =
     list.any(t.tags, fn(tag) { list.contains(ignored_tags, tag) })
 
@@ -303,7 +307,10 @@ fn emit_skips(
   }
 }
 
-fn apply_skip(t: Test, state: ExecutionState) -> #(TestResult, ExecutionState) {
+fn apply_skip(
+  t: discover.Test,
+  state: ExecutionState,
+) -> #(TestResult, ExecutionState) {
   let result = TestResult(item: t, outcome: Skipped, duration_ms: 0)
   let new_state =
     ExecutionState(
@@ -316,7 +323,7 @@ fn apply_skip(t: Test, state: ExecutionState) -> #(TestResult, ExecutionState) {
 }
 
 fn process_run_result(
-  t: Test,
+  t: discover.Test,
   result: TestRunResult,
   duration: Int,
   state: ExecutionState,

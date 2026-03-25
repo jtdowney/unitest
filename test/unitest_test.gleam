@@ -8,8 +8,8 @@ pub fn main() -> Nil {
   unitest.main()
 }
 
-fn default_cli_opts() -> cli.CliOptions {
-  cli.CliOptions(
+fn default_cli_opts() -> cli.Options {
+  cli.Options(
     seed: option.None,
     filter: cli.Filter(location: cli.AllLocations, tag: option.None),
     no_color: False,
@@ -95,7 +95,7 @@ pub fn resolve_package_name_returns_parse_error_test() {
 pub fn resolve_cli_action_runs_valid_args_test() {
   assert unitest.resolve_cli_action(["--workers", "4"])
     == unitest.RunWithCliOptions(
-      cli.CliOptions(..default_cli_opts(), workers: option.Some(4)),
+      cli.Options(..default_cli_opts(), workers: option.Some(4)),
     )
 }
 

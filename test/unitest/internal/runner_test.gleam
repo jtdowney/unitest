@@ -2,16 +2,13 @@ import gleam/list
 import gleam/option
 import gleam/string
 import unitest/internal/cli
-import unitest/internal/discover.{type Test}
-import unitest/internal/runner.{
-  type ExecuteResult, type Platform, type PoolResult, type Progress,
-  type TestResult,
-}
+import unitest/internal/discover
+import unitest/internal/runner
 import unitest/internal/test_failure.{type TestFailure}
 
 fn noop_callback(
-  _result: TestResult,
-  _progress: Progress,
+  _result: runner.TestResult,
+  _progress: runner.Progress,
   continue: fn() -> Nil,
 ) -> Nil {
   continue()
@@ -30,13 +27,13 @@ fn test_failure(message: String) -> TestFailure {
 
 @external(erlang, "unitest_test_ffi", "send_pool_result")
 @external(javascript, "../../unitest_test_ffi.mjs", "sendPoolResult")
-fn send_pool_result(pr: PoolResult) -> Nil
+fn send_pool_result(pr: runner.PoolResult) -> Nil
 
 @external(erlang, "unitest_test_ffi", "receive_pool_result_test")
 @external(javascript, "../../unitest_test_ffi.mjs", "receivePoolResultTest")
-fn receive_pool_result_test(callback: fn(PoolResult) -> Nil) -> Nil
+fn receive_pool_result_test(callback: fn(runner.PoolResult) -> Nil) -> Nil
 
-fn make_test(module: String, name: String, tags: List(String)) -> Test {
+fn make_test(module: String, name: String, tags: List(String)) -> discover.Test {
   discover.Test(
     module: module,
     name: name,
@@ -49,8 +46,8 @@ fn make_test(module: String, name: String, tags: List(String)) -> Test {
 fn make_cli_opts(
   location: cli.LocationFilter,
   tag: option.Option(String),
-) -> cli.CliOptions {
-  cli.CliOptions(
+) -> cli.Options {
+  cli.Options(
     seed: option.None,
     filter: cli.Filter(location:, tag:),
     no_color: False,
@@ -66,9 +63,9 @@ fn make_cli_opts(
 fn execute_sync_sequential(
   plan: List(runner.PlanItem),
   seed: Int,
-  platform: Platform,
-  on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
-  callback: fn(ExecuteResult) -> a,
+  platform: runner.Platform,
+  on_result: fn(runner.TestResult, runner.Progress, fn() -> Nil) -> Nil,
+  callback: fn(runner.ExecuteResult) -> a,
 ) -> a
 
 @external(erlang, "unitest_test_ffi", "execute_sync_pooled")
@@ -77,15 +74,15 @@ fn execute_sync_pooled(
   plan: List(runner.PlanItem),
   seed: Int,
   workers: Int,
-  platform: Platform,
-  on_result: fn(TestResult, Progress, fn() -> Nil) -> Nil,
-  callback: fn(ExecuteResult) -> a,
+  platform: runner.Platform,
+  on_result: fn(runner.TestResult, runner.Progress, fn() -> Nil) -> Nil,
+  callback: fn(runner.ExecuteResult) -> a,
 ) -> a
 
 fn make_sequential_platform(
-  run_test: fn(Test) -> runner.TestRunResult,
+  run_test: fn(discover.Test) -> runner.TestRunResult,
   now_ms: fn() -> Int,
-) -> Platform {
+) -> runner.Platform {
   runner.Platform(
     now_ms:,
     run_test: fn(t, k) { k(run_test(t)) },
@@ -96,8 +93,8 @@ fn make_sequential_platform(
 }
 
 fn make_pooled_platform(
-  start_module_pool: fn(List(List(Test)), Int) -> Nil,
-) -> Platform {
+  start_module_pool: fn(List(List(discover.Test)), Int) -> Nil,
+) -> runner.Platform {
   runner.Platform(
     now_ms: fn() { 100 },
     run_test: fn(_t, _k) { Nil },
@@ -590,8 +587,8 @@ pub fn execute_pooled_emits_skip_callbacks_test() {
   let plan = [runner.Run(t1), runner.Skip(t2), runner.Run(t3)]
 
   let callback_outcomes = fn(
-    result: TestResult,
-    _progress: Progress,
+    result: runner.TestResult,
+    _progress: runner.Progress,
     continue: fn() -> Nil,
   ) -> Nil {
     case result.outcome {
