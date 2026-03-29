@@ -37,12 +37,12 @@ Run with `gleam test`.
 
 ## Features
 
-- **Random test ordering** with reproducible seeds
-- **Test tagging** for categorization and filtering
-- **Runtime guards** for conditional test execution (platform, version checks)
-- **CLI filtering** by file path, line number, test name, or tag
-- **Parallel execution** of module groups with configurable worker count
-- **Flexible output**: streaming dots (default) or table format
+- Random test ordering with reproducible seeds
+- Test tagging for categorization and filtering
+- Runtime guards for conditional test execution (platform, version checks)
+- CLI filtering by file path, line number, test name, or tag
+- Parallel execution of module groups with configurable worker count
+- Streaming dot (default) or table output format
 
 ## Why you may not want to use unitest
 
@@ -70,7 +70,7 @@ gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag
 gleam test -- --workers 4                     # Parallel with 4 module-group workers
 ```
 
-The positional file argument supports partial matching, so `my_mod_test.gleam` will match `test/my_mod_test.gleam`.
+The `test/` prefix can be omitted from file paths: `my_mod_test.gleam` will match `test/my_mod_test.gleam`.
 
 ## Tagging Tests
 
@@ -155,9 +155,5 @@ pub fn main() {
 
 Tests tagged "slow" will show as `S` (skipped).
 Override with `gleam test -- --tag slow`.
-
-## Examples
-
-See [`examples/demo/`](examples/demo/) for a complete working project.
 
 Further documentation at [hexdocs.pm/unitest](https://hexdocs.pm/unitest).

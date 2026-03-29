@@ -1,9 +1,5 @@
-//// Unitest is a Gleam test runner with random ordering, tagging, and CLI filtering.
-////
-//// Drop-in replacement for gleeunit with additional features:
-//// - Random test ordering with reproducible seeds
-//// - Test tagging for selective execution
-//// - CLI filtering by module, test, or tag
+//// Unitest is a drop-in replacement for gleeunit that adds random test
+//// ordering (with reproducible seeds), tagging, and CLI filtering.
 
 import argv
 import envoy
@@ -55,34 +51,19 @@ pub type CliAction {
   ShowCliMessage(message: String, exit_code: Int)
 }
 
-/// Configuration options for the test runner.
+/// Configuration for the test runner.
 ///
-/// ## Fields
-///
-/// - `seed`: Optional seed for deterministic test ordering. When `None`,
-///   a random seed is generated automatically.
-/// - `ignored_tags`: Tests with any of these tags will be skipped and
-///   reported as `S` in the output.
-/// - `test_directory`: Directory containing test files.
-/// - `sort_order`: Default sort order for table reporter output.
-/// - `sort_reversed`: Whether to reverse the sort order.
-/// - `check_results`: When `True`, tests returning `Error(reason)` are
-///   treated as failures. Default is `False`.
-/// - `execution_mode`: Controls how tests are executed. See
-///   [`ExecutionMode`](#ExecutionMode) for details. Can be overridden
-///   at the CLI with `--workers`.
+/// Tests with any `ignored_tags` are skipped and reported as `S`.
+/// When `check_results` is `True`, tests returning `Error(reason)`
+/// are treated as failures (default `False`).
 ///
 /// ## Example
 ///
 /// ```gleam
 /// unitest.run(Options(
-///   seed: Some(12345),
-///   ignored_tags: ["slow", "integration"],
-///   test_directory: "test",
-///   sort_order: cli.TimeSort,
-///   sort_reversed: False,
-///   check_results: False,
-///   execution_mode: RunSequential,
+///   ..unitest.default_options(),
+///   ignored_tags: ["slow"],
+///   execution_mode: RunParallelAuto,
 /// ))
 /// ```
 pub type Options {
@@ -112,18 +93,22 @@ pub fn default_options() -> Options {
 
 /// Run tests with the given options.
 ///
-/// Discovers all test files in the test directory, applies CLI arguments for
-/// filtering, shuffles tests using the selected seed, executes them, and
-/// prints results.
+/// Discovers test files, applies CLI filters, shuffles with the
+/// selected seed, executes, and prints results.
 ///
 /// ## CLI Arguments
 ///
 /// Pass arguments after `--` when running `gleam test`:
 ///
-/// - `--seed <int>`: Use specific seed for reproducible ordering
-/// - `--module <name>`: Run only tests in matching module
+/// - `<file>` or `<file>:<line>`: Run tests in a file, optionally at a line
 /// - `--test <module.fn>`: Run a single test function
 /// - `--tag <name>`: Run only tests with this tag
+/// - `--seed <int>`: Reproducible ordering
+/// - `--reporter <dot|table>`: Output format (default: dot)
+/// - `--sort <native|time|name>`: Sort order for table reporter
+/// - `--sort-rev`: Reverse sort order
+/// - `--workers <int>`: Parallel module-group workers
+/// - `--no-color`: Disable colored output
 ///
 /// ## Example
 ///
