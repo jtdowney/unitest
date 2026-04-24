@@ -334,8 +334,9 @@ pub fn apply_parallel_threshold(
 ) -> ResolvedExecutionMode {
   use <- bool.guard(when: option.is_some(cli_workers), return: mode)
   case option_mode, mode {
-    RunParallelAuto, ResolvedParallel(_) if runnable_count < parallel_threshold ->
-      ResolvedAsync
+    RunParallelAuto, ResolvedParallel(_)
+      if runnable_count < parallel_threshold
+    -> ResolvedAsync
     _, _ -> mode
   }
 }

@@ -96,7 +96,9 @@ pub fn parse_module_for_target(
         is_available_for_target(def.attributes, target)
       {
         glance.Public, True, True -> Ok(parse_function(func))
-        glance.Private, _, _ | glance.Public, False, _ | glance.Public, _, False
+        glance.Private, _, _
+        | glance.Public, False, _
+        | glance.Public, _, False
         -> Error(Nil)
       }
     })
