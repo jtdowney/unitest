@@ -33,7 +33,11 @@ fn send_pool_result(pr: runner.PoolResult) -> Nil
 @external(javascript, "../../unitest_test_ffi.mjs", "receivePoolResultTest")
 fn receive_pool_result_test(callback: fn(runner.PoolResult) -> Nil) -> Nil
 
-fn make_test(module: String, name: String, tags: List(String)) -> discover.Test {
+fn make_test(
+  module: String,
+  name: String,
+  tags: List(String),
+) -> discover.Test {
   discover.Test(
     module: module,
     name: name,

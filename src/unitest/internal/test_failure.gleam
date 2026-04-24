@@ -268,7 +268,11 @@ pub fn extract_snippet(
   |> result.map(string.trim)
 }
 
-fn slice_bits(bits: BitArray, start: Int, length: Int) -> Result(BitArray, Nil) {
+fn slice_bits(
+  bits: BitArray,
+  start: Int,
+  length: Int,
+) -> Result(BitArray, Nil) {
   let total = bit_array.byte_size(bits)
   case start >= 0 && start + length <= total {
     False -> Error(Nil)
