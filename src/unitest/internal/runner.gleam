@@ -60,14 +60,7 @@ pub type Platform {
 }
 
 type ExecutionState {
-  ExecutionState(
-    passed: Int,
-    failed: Int,
-    skipped: Int,
-    failures: List(FailureRecord),
-    results: List(TestResult),
-    idx: Int,
-  )
+  ExecutionState(results: List(TestResult), idx: Int)
 }
 
 type LoopContext {
@@ -82,14 +75,7 @@ type LoopContext {
 }
 
 fn initial_state() -> ExecutionState {
-  ExecutionState(
-    passed: 0,
-    failed: 0,
-    skipped: 0,
-    failures: [],
-    results: [],
-    idx: 0,
-  )
+  ExecutionState(results: [], idx: 0)
 }
 
 pub fn plan(
@@ -318,25 +304,7 @@ fn emit_skips(
 }
 
 fn add_result(state: ExecutionState, result: TestResult) -> ExecutionState {
-  let base =
-    ExecutionState(
-      ..state,
-      results: [result, ..state.results],
-      idx: state.idx + 1,
-    )
-  case result.outcome {
-    Passed -> ExecutionState(..base, passed: state.passed + 1)
-    Skipped -> ExecutionState(..base, skipped: state.skipped + 1)
-    Failed(error) ->
-      ExecutionState(..base, failed: state.failed + 1, failures: [
-        FailureRecord(
-          item: result.item,
-          error:,
-          duration_ms: result.duration_ms,
-        ),
-        ..state.failures
-      ])
-  }
+  ExecutionState(results: [result, ..state.results], idx: state.idx + 1)
 }
 
 fn apply_skip(
@@ -363,11 +331,20 @@ fn process_run_result(
 }
 
 fn build_report(state: ExecutionState, seed: Int, runtime_ms: Int) -> Report {
+  let results = list.reverse(state.results)
+  let failures =
+    list.filter_map(results, fn(r) {
+      case r.outcome {
+        Failed(error) ->
+          Ok(FailureRecord(item: r.item, error:, duration_ms: r.duration_ms))
+        Passed | Skipped -> Error(Nil)
+      }
+    })
   Report(
-    passed: state.passed,
-    failed: state.failed,
-    skipped: state.skipped,
-    failures: list.reverse(state.failures),
+    passed: list.count(results, fn(r) { r.outcome == Passed }),
+    failed: list.length(failures),
+    skipped: list.count(results, fn(r) { r.outcome == Skipped }),
+    failures:,
     seed:,
     runtime_ms:,
   )
