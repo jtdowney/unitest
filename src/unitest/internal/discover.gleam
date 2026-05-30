@@ -1,5 +1,6 @@
 import glance
 import gleam/bit_array
+import gleam/io
 import gleam/list
 import gleam/result
 import gleam/string
@@ -61,8 +62,18 @@ fn discover_tests_in_file(path: String, base_path: String) -> List(Test) {
 
   case simplifile.read(path) {
     Error(_) -> []
-    Ok(contents) ->
-      parse_module(contents)
+    Ok(contents) -> {
+      let parsed = parse_module(contents)
+      case parsed {
+        Ok(_) -> Nil
+        Error(_) -> {
+          io.println_error(
+            "Warning: could not parse " <> path <> ", skipping its tests",
+          )
+        }
+      }
+
+      parsed
       |> result.unwrap([])
       |> list.map(fn(pt) {
         let start_line = byte_offset_to_line(contents, pt.byte_span.start)
@@ -75,6 +86,7 @@ fn discover_tests_in_file(path: String, base_path: String) -> List(Test) {
           line_span: LineSpan(start_line, end_line),
         )
       })
+    }
   }
 }
 
