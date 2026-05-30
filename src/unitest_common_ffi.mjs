@@ -7,6 +7,10 @@ export function isSkipException(e) {
   return e && typeof e === "object" && SKIP_SYMBOL in e;
 }
 
+export function genericError(message) {
+  return { kind: "error", message };
+}
+
 export function formatGenericError(error) {
   if (error == null) {
     return "";
@@ -139,20 +143,11 @@ function serializeError(e) {
           value: stringInspect(e.value),
         };
         break;
-      default:
-        base.panicKind = { type: "generic" };
     }
     return base;
   }
 
-  return {
-    message: formatGenericError(e),
-    file: "",
-    module: "",
-    fn: "",
-    line: 0,
-    panicKind: { type: "generic" },
-  };
+  return { message: formatGenericError(e) };
 }
 
 export async function runTestRaw(moduleUrl, fnName, checkResults) {
@@ -162,28 +157,11 @@ export async function runTestRaw(moduleUrl, fnName, checkResults) {
       const result = await mod[fnName]();
       if (checkResults && Result$isError(result)) {
         const reason = result[0];
-        const message = "Test returned Error: " + stringInspect(reason);
-        return {
-          kind: "error",
-          message,
-          file: "",
-          module: "",
-          fn: "",
-          line: 0,
-          panicKind: { type: "generic" },
-        };
+        return genericError(`Test returned Error: ${stringInspect(reason)}`);
       }
       return { kind: "ran" };
     } else {
-      return {
-        kind: "error",
-        message: "Function " + fnName + " not found in module",
-        file: "",
-        module: "",
-        fn: "",
-        line: 0,
-        panicKind: { type: "generic" },
-      };
+      return genericError(`Function ${fnName} not found in module`);
     }
   } catch (e) {
     if (isSkipException(e)) {

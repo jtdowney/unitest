@@ -1,6 +1,6 @@
 import { parentPort } from "node:worker_threads";
 
-import { runTestRaw } from "./unitest_common_ffi.mjs";
+import { genericError, runTestRaw } from "./unitest_common_ffi.mjs";
 
 parentPort.on("message", async (msg) => {
   if (msg.type === "run") {
@@ -9,15 +9,7 @@ parentPort.on("message", async (msg) => {
     try {
       result = await runTestRaw(msg.moduleUrl, msg.fnName, msg.checkResults);
     } catch {
-      result = {
-        kind: "error",
-        message: "Worker test execution failed",
-        file: "",
-        module: "",
-        fn: "",
-        line: 0,
-        panicKind: { type: "generic" },
-      };
+      result = genericError("Worker test execution failed");
     }
     const durationMs = Date.now() - start;
     parentPort.postMessage({
