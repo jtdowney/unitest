@@ -280,13 +280,7 @@ fn run_with_cli_opts(cli_opts: cli.Options, options: Options) -> Nil {
   let sort_reversed =
     bool.exclusive_or(cli_opts.sort_reversed, options.sort_reversed)
 
-  let runnable_count =
-    list.count(plan, fn(item) {
-      case item {
-        runner.Run(_) -> True
-        runner.Skip(_) -> False
-      }
-    })
+  let runnable_count = list.count(plan, runner.is_run)
 
   let mode =
     resolve_execution_mode(

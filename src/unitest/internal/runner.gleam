@@ -152,6 +152,22 @@ fn to_plan_item(
   }
 }
 
+pub fn is_run(item: PlanItem) -> Bool {
+  case item {
+    Run(_) -> True
+    Skip(_) -> False
+  }
+}
+
+pub fn runnable_tests(plan: List(PlanItem)) -> List(discover.Test) {
+  list.filter_map(plan, fn(item) {
+    case item {
+      Run(t) -> Ok(t)
+      Skip(_) -> Error(Nil)
+    }
+  })
+}
+
 pub type Progress {
   Progress(current: Int, total: Int)
 }
@@ -232,13 +248,7 @@ pub fn execute_pooled(
   let total = list.length(plan)
   let start_ms = platform.now_ms()
 
-  let tests =
-    list.filter_map(plan, fn(item) {
-      case item {
-        Run(t) -> Ok(t)
-        Skip(_) -> Error(Nil)
-      }
-    })
+  let tests = runnable_tests(plan)
   let remaining = list.length(tests)
 
   let finish = fn(final_state) {
