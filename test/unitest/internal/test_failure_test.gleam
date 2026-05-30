@@ -105,7 +105,6 @@ pub fn format_failure_with_binary_operator_shows_left_right_test() {
       kind: test_failure.Assert(
         start: 0,
         end: 0,
-        expression_start: 0,
         kind: test_failure.BinaryOperator(
           operator: "==",
           left: test_failure.AssertedExpr(
@@ -175,7 +174,6 @@ pub fn format_failure_with_function_call_shows_args_test() {
       kind: test_failure.Assert(
         start: 0,
         end: 0,
-        expression_start: 0,
         kind: test_failure.FunctionCall(arguments: [
           test_failure.AssertedExpr(
             start: 0,
@@ -260,7 +258,6 @@ pub fn format_failure_labels_literal_values_test() {
       kind: test_failure.Assert(
         start: 0,
         end: 0,
-        expression_start: 0,
         kind: test_failure.BinaryOperator(
           operator: "==",
           left: test_failure.AssertedExpr(
@@ -302,7 +299,6 @@ pub fn format_failure_labels_expression_values_test() {
       kind: test_failure.Assert(
         start: 0,
         end: 0,
-        expression_start: 0,
         kind: test_failure.BinaryOperator(
           operator: "==",
           left: test_failure.AssertedExpr(
@@ -425,7 +421,6 @@ pub fn format_failure_with_other_expression_shows_value_test() {
       kind: test_failure.Assert(
         start: 0,
         end: 0,
-        expression_start: 0,
         kind: test_failure.OtherExpression(
           expression: test_failure.AssertedExpr(
             start: 0,
