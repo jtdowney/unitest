@@ -317,19 +317,34 @@ fn emit_skips(
   }
 }
 
+fn add_result(state: ExecutionState, result: TestResult) -> ExecutionState {
+  let base =
+    ExecutionState(
+      ..state,
+      results: [result, ..state.results],
+      idx: state.idx + 1,
+    )
+  case result.outcome {
+    Passed -> ExecutionState(..base, passed: state.passed + 1)
+    Skipped -> ExecutionState(..base, skipped: state.skipped + 1)
+    Failed(error) ->
+      ExecutionState(..base, failed: state.failed + 1, failures: [
+        FailureRecord(
+          item: result.item,
+          error:,
+          duration_ms: result.duration_ms,
+        ),
+        ..state.failures
+      ])
+  }
+}
+
 fn apply_skip(
   t: discover.Test,
   state: ExecutionState,
 ) -> #(TestResult, ExecutionState) {
   let result = TestResult(item: t, outcome: Skipped, duration_ms: 0)
-  let new_state =
-    ExecutionState(
-      ..state,
-      skipped: state.skipped + 1,
-      results: [result, ..state.results],
-      idx: state.idx + 1,
-    )
-  #(result, new_state)
+  #(result, add_result(state, result))
 }
 
 fn process_run_result(
@@ -344,22 +359,7 @@ fn process_run_result(
     RunError(err) -> Failed(err)
   }
   let test_result = TestResult(item: t, outcome:, duration_ms: duration)
-  let base =
-    ExecutionState(
-      ..state,
-      results: [test_result, ..state.results],
-      idx: state.idx + 1,
-    )
-  let new_state = case outcome {
-    Passed -> ExecutionState(..base, passed: state.passed + 1)
-    Skipped -> ExecutionState(..base, skipped: state.skipped + 1)
-    Failed(error) ->
-      ExecutionState(..base, failed: state.failed + 1, failures: [
-        FailureRecord(item: t, error:, duration_ms: duration),
-        ..state.failures
-      ])
-  }
-  #(test_result, new_state)
+  #(test_result, add_result(state, test_result))
 }
 
 fn build_report(state: ExecutionState, seed: Int, runtime_ms: Int) -> Report {
