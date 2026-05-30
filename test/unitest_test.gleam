@@ -126,96 +126,72 @@ pub fn resolve_execution_mode_cli_workers_override_test() {
       option.Some(8),
       unitest.RunSequential,
       16,
+      100,
     )
     == unitest.ResolvedParallel(8)
 }
 
 pub fn resolve_execution_mode_uses_option_mode_test() {
-  assert unitest.resolve_execution_mode(option.None, unitest.RunAsync, 16)
+  assert unitest.resolve_execution_mode(option.None, unitest.RunAsync, 16, 100)
     == unitest.ResolvedAsync
 }
 
-pub fn resolve_execution_mode_auto_resolves_to_parallel_test() {
+pub fn resolve_execution_mode_sequential_passthrough_test() {
   assert unitest.resolve_execution_mode(
       option.None,
-      unitest.RunParallelAuto,
-      12,
+      unitest.RunSequential,
+      16,
+      100,
     )
-    == unitest.ResolvedParallel(12)
-}
-
-pub fn resolve_execution_mode_sequential_passthrough_test() {
-  assert unitest.resolve_execution_mode(option.None, unitest.RunSequential, 16)
     == unitest.ResolvedSequential
 }
 
 pub fn resolve_execution_mode_parallel_passthrough_test() {
-  assert unitest.resolve_execution_mode(option.None, unitest.RunParallel(4), 16)
-    == unitest.ResolvedParallel(4)
-}
-
-pub fn guard_is_lazily_evaluated_test() {
-  use <- unitest.guard(True)
-  let success = True
-  assert success
-}
-
-pub fn apply_parallel_threshold_below_downgrades_to_async_test() {
-  assert unitest.apply_parallel_threshold(
-      unitest.ResolvedParallel(4),
-      10,
-      unitest.RunParallelAuto,
+  assert unitest.resolve_execution_mode(
       option.None,
-    )
-    == unitest.ResolvedAsync
-}
-
-pub fn apply_parallel_threshold_above_keeps_parallel_test() {
-  assert unitest.apply_parallel_threshold(
-      unitest.ResolvedParallel(4),
-      100,
-      unitest.RunParallelAuto,
-      option.None,
-    )
-    == unitest.ResolvedParallel(4)
-}
-
-pub fn apply_parallel_threshold_sequential_unaffected_test() {
-  assert unitest.apply_parallel_threshold(
-      unitest.ResolvedSequential,
-      10,
-      unitest.RunParallelAuto,
-      option.None,
-    )
-    == unitest.ResolvedSequential
-}
-
-pub fn apply_parallel_threshold_async_unaffected_test() {
-  assert unitest.apply_parallel_threshold(
-      unitest.ResolvedAsync,
-      10,
-      unitest.RunParallelAuto,
-      option.None,
-    )
-    == unitest.ResolvedAsync
-}
-
-pub fn apply_parallel_threshold_explicit_parallel_bypasses_threshold_test() {
-  assert unitest.apply_parallel_threshold(
-      unitest.ResolvedParallel(4),
-      10,
       unitest.RunParallel(4),
-      option.None,
+      16,
+      100,
     )
     == unitest.ResolvedParallel(4)
 }
 
-pub fn apply_parallel_threshold_cli_workers_prevents_downgrade_test() {
-  assert unitest.apply_parallel_threshold(
-      unitest.ResolvedParallel(4),
-      10,
+pub fn resolve_execution_mode_auto_above_threshold_resolves_to_parallel_test() {
+  assert unitest.resolve_execution_mode(
+      option.None,
       unitest.RunParallelAuto,
+      12,
+      100,
+    )
+    == unitest.ResolvedParallel(12)
+}
+
+pub fn resolve_execution_mode_auto_below_threshold_downgrades_to_async_test() {
+  assert unitest.resolve_execution_mode(
+      option.None,
+      unitest.RunParallelAuto,
+      12,
+      10,
+    )
+    == unitest.ResolvedAsync
+}
+
+pub fn resolve_execution_mode_explicit_parallel_ignores_threshold_test() {
+  assert unitest.resolve_execution_mode(
+      option.None,
+      unitest.RunParallel(4),
+      16,
+      10,
+    )
+    == unitest.ResolvedParallel(4)
+}
+
+pub fn resolve_execution_mode_cli_workers_override_ignores_threshold_test() {
+  assert unitest.resolve_execution_mode(
       option.Some(4),
+      unitest.RunParallelAuto,
+      16,
+      10,
     )
     == unitest.ResolvedParallel(4)
 }
