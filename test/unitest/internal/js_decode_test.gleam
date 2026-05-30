@@ -126,18 +126,18 @@ fn make_asserted_expr_no_value(start: Int, end: Int, kind: String) -> Dynamic {
 
 pub fn decode_ran_result_test() {
   let result = js_decode.decode_test_run_result(make_ran_result())
-  assert result == runner.Ran
+  assert result == runner.Passed
 }
 
 pub fn decode_skip_result_test() {
   let result = js_decode.decode_test_run_result(make_skip_result())
-  assert result == runner.RuntimeSkip
+  assert result == runner.Skipped
 }
 
 pub fn decode_unknown_kind_falls_back_to_error_test() {
   let result = js_decode.decode_test_run_result(make_unknown_result())
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "Unknown result kind",
       "",
       "",
@@ -159,7 +159,7 @@ pub fn decode_error_with_generic_panic_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "something broke",
       "src/foo.gleam",
       "foo",
@@ -181,7 +181,7 @@ pub fn decode_error_with_panic_kind_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "panicked",
       "src/a.gleam",
       "a",
@@ -196,7 +196,7 @@ pub fn decode_error_with_todo_kind_test() {
     make_error_result("not done", "src/b.gleam", "b", "g", 5, make_todo_panic())
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "not done",
       "src/b.gleam",
       "b",
@@ -218,7 +218,7 @@ pub fn decode_error_with_let_assert_kind_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "let assert failed",
       "src/c.gleam",
       "c",
@@ -243,7 +243,7 @@ pub fn decode_error_with_assert_binary_operator_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "assert failed",
       "src/d.gleam",
       "d",
@@ -276,7 +276,7 @@ pub fn decode_error_with_assert_function_call_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "fn call assert",
       "src/e.gleam",
       "e",
@@ -307,7 +307,7 @@ pub fn decode_error_with_assert_other_expression_test() {
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "other expr",
       "src/f.gleam",
       "f",
@@ -329,7 +329,7 @@ pub fn decode_error_missing_panic_kind_defaults_to_generic_test() {
   let raw = make_error_result_no_panic_kind("oops")
   let result = js_decode.decode_test_run_result(raw)
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "oops",
       "",
       "",
@@ -342,7 +342,7 @@ pub fn decode_error_missing_panic_kind_defaults_to_generic_test() {
 pub fn decode_malformed_input_returns_run_error_test() {
   let result = js_decode.decode_test_run_result(dynamic.int(42))
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "Failed to decode test result",
       "",
       "",
@@ -355,7 +355,7 @@ pub fn decode_malformed_input_returns_run_error_test() {
 pub fn make_crash_error_test() {
   let result = js_decode.make_crash_error("Worker crashed: timeout")
   assert result
-    == runner.RunError(test_failure.TestFailure(
+    == runner.Failed(test_failure.TestFailure(
       "Worker crashed: timeout",
       "",
       "",
