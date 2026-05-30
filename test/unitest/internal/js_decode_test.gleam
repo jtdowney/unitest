@@ -1,5 +1,4 @@
 import gleam/dynamic.{type Dynamic}
-import unitest/internal/discover
 import unitest/internal/js_decode
 import unitest/internal/runner
 import unitest/internal/test_failure
@@ -338,19 +337,6 @@ pub fn decode_error_missing_panic_kind_defaults_to_generic_test() {
       0,
       test_failure.Generic,
     ))
-}
-
-pub fn wrap_pool_result_test() {
-  let item =
-    discover.Test(
-      module: "my_mod",
-      name: "my_test",
-      tags: [],
-      file_path: "test/my_mod.gleam",
-      line_span: discover.LineSpan(1, 10),
-    )
-  let result = js_decode.wrap_pool_result(item, runner.Ran, 42)
-  assert result == runner.PoolResult(item:, result: runner.Ran, duration_ms: 42)
 }
 
 pub fn decode_malformed_input_returns_run_error_test() {

@@ -1,6 +1,5 @@
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
-import unitest/internal/discover
 import unitest/internal/runner
 import unitest/internal/test_failure.{type TestFailure}
 
@@ -22,14 +21,6 @@ pub fn decode_test_run_result(raw: Dynamic) -> runner.TestRunResult {
     Ok(result) -> result
     Error(_) -> make_crash_error("Failed to decode test result")
   }
-}
-
-pub fn wrap_pool_result(
-  item: discover.Test,
-  result: runner.TestRunResult,
-  duration_ms: Int,
-) -> runner.PoolResult {
-  runner.PoolResult(item:, result:, duration_ms:)
 }
 
 pub fn make_crash_error(message: String) -> runner.TestRunResult {

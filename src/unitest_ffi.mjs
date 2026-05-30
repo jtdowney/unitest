@@ -1,9 +1,9 @@
 import { SKIP_SYMBOL, runTestRaw } from "./unitest_common_ffi.mjs";
 import {
   decode_test_run_result as decodeTestRunResult,
-  wrap_pool_result as wrapPoolResult,
   make_crash_error as makeCrashError,
 } from "./unitest/internal/js_decode.mjs";
+import { PoolResult$PoolResult as poolResult } from "./unitest/internal/runner.mjs";
 
 function formatError(err) {
   return err == null ? String(err) : err.message || String(err);
@@ -130,12 +130,12 @@ function startWithPromises(moduleGroups, packageName, checkResults, workers) {
           const start = nowMs();
           runTest(test, packageName, checkResults)
             .then((result) => {
-              deliverPoolResult(wrapPoolResult(test, result, nowMs() - start));
+              deliverPoolResult(poolResult(test, result, nowMs() - start));
             })
             .catch((err) => {
               const msg = formatError(err);
               deliverPoolResult(
-                wrapPoolResult(test, makeCrashError(msg), nowMs() - start),
+                poolResult(test, makeCrashError(msg), nowMs() - start),
               );
             })
             .finally(() => {
@@ -215,7 +215,7 @@ function startWithWorkerThreads(
 
     if (w._pendingTests && w._pendingTests.size > 0) {
       for (const test of w._pendingTests) {
-        deliverPoolResult(wrapPoolResult(test, makeCrashError(reason), 0));
+        deliverPoolResult(poolResult(test, makeCrashError(reason), 0));
       }
       w._pendingTests = null;
     }
@@ -247,7 +247,7 @@ function startWithWorkerThreads(
           w._pendingTests.delete(test);
         }
         deliverPoolResult(
-          wrapPoolResult(test, decodeTestRunResult(msg.result), msg.durationMs),
+          poolResult(test, decodeTestRunResult(msg.result), msg.durationMs),
         );
         w._pendingCount -= 1;
         if (w._pendingCount === 0) {
