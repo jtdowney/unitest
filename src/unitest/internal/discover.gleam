@@ -79,13 +79,7 @@ fn discover_tests_in_file(path: String, base_path: String) -> List(Test) {
 }
 
 pub fn parse_module(source: String) -> Result(List(ParsedTest), glance.Error) {
-  parse_module_for_target(source, current_target())
-}
-
-pub fn parse_module_for_target(
-  source: String,
-  target: String,
-) -> Result(List(ParsedTest), glance.Error) {
+  let target = current_target()
   glance.module(source)
   |> result.map(fn(module) {
     list.filter_map(module.functions, fn(def) {
