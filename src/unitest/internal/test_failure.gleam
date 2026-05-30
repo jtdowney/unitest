@@ -20,7 +20,7 @@ pub type TestFailure {
 }
 
 pub type PanicKind {
-  Assert(start: Int, end: Int, expression_start: Int, kind: AssertKind)
+  Assert(start: Int, end: Int, kind: AssertKind)
   Panic
   Todo
   LetAssert(start: Int, end: Int, value: String)

@@ -3,7 +3,7 @@ import { Result$isError } from "./gleam.mjs";
 
 export const SKIP_SYMBOL = Symbol.for("gleam_unitest_skip");
 
-export function isSkipException(e) {
+function isSkipException(e) {
   return e && typeof e === "object" && SKIP_SYMBOL in e;
 }
 
@@ -11,7 +11,7 @@ export function genericError(message) {
   return { kind: "error", message };
 }
 
-export function formatGenericError(error) {
+function formatGenericError(error) {
   if (error == null) {
     return "";
   }
@@ -125,7 +125,6 @@ function serializeError(e) {
           type: "assert",
           start: e.start || 0,
           end: e.end || 0,
-          expressionStart: e.expression_start || 0,
           assertKind: serializeAssertKind(e),
         };
         break;

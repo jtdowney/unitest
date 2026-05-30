@@ -58,17 +58,11 @@ fn make_todo_panic() -> Dynamic {
   dynamic.properties([prop("type", dynamic.string("todo"))])
 }
 
-fn make_assert_panic(
-  start: Int,
-  end: Int,
-  expression_start: Int,
-  assert_kind: Dynamic,
-) -> Dynamic {
+fn make_assert_panic(start: Int, end: Int, assert_kind: Dynamic) -> Dynamic {
   dynamic.properties([
     prop("type", dynamic.string("assert")),
     prop("start", dynamic.int(start)),
     prop("end", dynamic.int(end)),
-    prop("expressionStart", dynamic.int(expression_start)),
     prop("assertKind", assert_kind),
   ])
 }
@@ -246,7 +240,7 @@ pub fn decode_error_with_assert_binary_operator_test() {
       "d",
       "i",
       30,
-      make_assert_panic(5, 40, 15, assert_kind),
+      make_assert_panic(5, 40, assert_kind),
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
@@ -259,7 +253,6 @@ pub fn decode_error_with_assert_binary_operator_test() {
       test_failure.Assert(
         start: 5,
         end: 40,
-        expression_start: 15,
         kind: test_failure.BinaryOperator(
           operator: "==",
           left: test_failure.AssertedExpr(10, 20, test_failure.Literal("1")),
@@ -280,7 +273,7 @@ pub fn decode_error_with_assert_function_call_test() {
       "e",
       "j",
       50,
-      make_assert_panic(0, 60, 10, assert_kind),
+      make_assert_panic(0, 60, assert_kind),
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
@@ -293,7 +286,6 @@ pub fn decode_error_with_assert_function_call_test() {
       test_failure.Assert(
         start: 0,
         end: 60,
-        expression_start: 10,
         kind: test_failure.FunctionCall([
           test_failure.AssertedExpr(1, 5, test_failure.Literal("hello")),
           test_failure.AssertedExpr(7, 12, test_failure.Unevaluated),
@@ -312,7 +304,7 @@ pub fn decode_error_with_assert_other_expression_test() {
       "f",
       "k",
       70,
-      make_assert_panic(1, 80, 5, assert_kind),
+      make_assert_panic(1, 80, assert_kind),
     )
   let result = js_decode.decode_test_run_result(raw)
   assert result
@@ -325,7 +317,6 @@ pub fn decode_error_with_assert_other_expression_test() {
       test_failure.Assert(
         start: 1,
         end: 80,
-        expression_start: 5,
         kind: test_failure.OtherExpression(test_failure.AssertedExpr(
           3,
           8,

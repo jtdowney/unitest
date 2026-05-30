@@ -159,7 +159,7 @@ pub fn is_run(item: PlanItem) -> Bool {
   }
 }
 
-pub fn runnable_tests(plan: List(PlanItem)) -> List(discover.Test) {
+fn runnable_tests(plan: List(PlanItem)) -> List(discover.Test) {
   list.filter_map(plan, fn(item) {
     case item {
       Run(t) -> Ok(t)

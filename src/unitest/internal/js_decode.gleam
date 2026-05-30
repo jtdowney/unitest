@@ -70,11 +70,6 @@ fn decode_panic_kind_inner() -> decode.Decoder(test_failure.PanicKind) {
     "assert" -> {
       use start <- decode.optional_field("start", 0, decode.int)
       use end <- decode.optional_field("end", 0, decode.int)
-      use expression_start <- decode.optional_field(
-        "expressionStart",
-        0,
-        decode.int,
-      )
       use kind <- decode.optional_field(
         "assertKind",
         test_failure.OtherExpression(test_failure.AssertedExpr(
@@ -84,7 +79,7 @@ fn decode_panic_kind_inner() -> decode.Decoder(test_failure.PanicKind) {
         )),
         decode_assert_kind_inner(),
       )
-      decode.success(test_failure.Assert(start:, end:, expression_start:, kind:))
+      decode.success(test_failure.Assert(start:, end:, kind:))
     }
     "panic" -> decode.success(test_failure.Panic)
     "todo" -> decode.success(test_failure.Todo)

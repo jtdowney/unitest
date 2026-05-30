@@ -1,7 +1,6 @@
 -module(unitest_ffi).
 
 -export([
-    run_test/2,
     run_test_async/4,
     now_ms/0,
     skip/0,
@@ -114,7 +113,6 @@ build_assert_panic(Map) ->
     Kind = #assert{
         start = get_start(Map),
         'end' = get_end(Map),
-        expression_start = maps:get(expression_start, Map, 0),
         kind = build_assert_kind(Map)
     },
     base_failure(Map, <<"Assertion failed">>, Kind).
