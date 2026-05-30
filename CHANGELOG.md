@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-05-30
+
+### Added
+
+- Warn on stderr when a test file fails to parse, instead of silently skipping its tests
+- Warn on stderr when no tests are discovered
+
+### Fixed
+
+- Resolve the package name only from an exact `name` key in `gleam.toml`, avoiding false matches on similarly named keys
+
 ## [1.5.0] - 2026-02-09
 
 ### Added
@@ -91,6 +102,8 @@ Initial release of unitest, a Gleam test runner with random ordering, tagging, a
 - **Color output**: Colored output by default, respects `NO_COLOR` environment variable and `--no-color` flag
 - **Cross-platform support**: Works on Erlang and JavaScript targets
 
+[1.6.0]: https://github.com/jtdowney/unitest/releases/tag/v1.6.0
+[1.5.0]: https://github.com/jtdowney/unitest/releases/tag/v1.5.0
 [1.4.3]: https://github.com/jtdowney/unitest/releases/tag/v1.4.3
 [1.4.2]: https://github.com/jtdowney/unitest/releases/tag/v1.4.2
 [1.4.1]: https://github.com/jtdowney/unitest/releases/tag/v1.4.1
