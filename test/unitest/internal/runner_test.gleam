@@ -84,7 +84,7 @@ fn execute_sync_pooled(
 ) -> a
 
 fn make_sequential_platform(
-  run_test: fn(discover.Test) -> runner.TestRunResult,
+  run_test: fn(discover.Test) -> runner.Outcome,
   now_ms: fn() -> Int,
 ) -> runner.Platform {
   runner.Platform(
@@ -115,7 +115,7 @@ pub fn execute_passing_tests_counts_passed_test() {
   let plan = [runner.Run(t1), runner.Run(t2), runner.Run(t3)]
 
   let now_ms = fn() { 100 }
-  let platform = make_sequential_platform(fn(_t) { runner.Ran }, now_ms)
+  let platform = make_sequential_platform(fn(_t) { runner.Passed }, now_ms)
 
   use exec_result <- execute_sync_sequential(plan, 42, platform, noop_callback)
   let report = exec_result.report
@@ -133,7 +133,7 @@ pub fn execute_failing_test_counts_failure_test() {
   let now_ms = fn() { 100 }
   let platform =
     make_sequential_platform(
-      fn(_t) { runner.RunError(test_failure("assertion failed")) },
+      fn(_t) { runner.Failed(test_failure("assertion failed")) },
       now_ms,
     )
 
@@ -154,7 +154,7 @@ pub fn execute_skipped_test_counts_skipped_test() {
   let plan = [runner.Skip(t1)]
 
   let now_ms = fn() { 100 }
-  let platform = make_sequential_platform(fn(_t) { runner.Ran }, now_ms)
+  let platform = make_sequential_platform(fn(_t) { runner.Passed }, now_ms)
 
   use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
@@ -169,7 +169,7 @@ pub fn execute_captures_runtime_test() {
   let plan = [runner.Run(t1)]
 
   let now_ms = fn() { 100 }
-  let platform = make_sequential_platform(fn(_t) { runner.Ran }, now_ms)
+  let platform = make_sequential_platform(fn(_t) { runner.Passed }, now_ms)
 
   use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
@@ -182,7 +182,7 @@ pub fn execute_runtime_skip_counts_skipped_test() {
   let plan = [runner.Run(t1)]
 
   let now_ms = fn() { 100 }
-  let platform = make_sequential_platform(fn(_t) { runner.RuntimeSkip }, now_ms)
+  let platform = make_sequential_platform(fn(_t) { runner.Skipped }, now_ms)
 
   use exec_result <- execute_sync_sequential(plan, 1, platform, noop_callback)
   let report = exec_result.report
@@ -490,9 +490,9 @@ pub fn execute_pooled_returns_results_in_completion_order_test() {
 
   let platform =
     make_pooled_platform(fn(_groups, _workers) {
-      send_pool_result(runner.PoolResult(t2, runner.Ran, 3))
-      send_pool_result(runner.PoolResult(t1, runner.Ran, 7))
-      send_pool_result(runner.PoolResult(t3, runner.Ran, 1))
+      send_pool_result(runner.PoolResult(t2, runner.Passed, 3))
+      send_pool_result(runner.PoolResult(t1, runner.Passed, 7))
+      send_pool_result(runner.PoolResult(t3, runner.Passed, 1))
     })
 
   use exec_result <- execute_sync_pooled(plan, 99, 2, platform, noop_callback)
@@ -510,7 +510,7 @@ pub fn execute_pooled_mixed_run_skip_test() {
     make_pooled_platform(fn(groups, _workers) {
       list.each(groups, fn(group) {
         list.each(group, fn(t) {
-          send_pool_result(runner.PoolResult(t, runner.Ran, 5))
+          send_pool_result(runner.PoolResult(t, runner.Passed, 5))
         })
       })
     })
@@ -536,7 +536,7 @@ pub fn execute_pooled_failed_test_in_pool_test() {
     make_pooled_platform(fn(_groups, _workers) {
       send_pool_result(runner.PoolResult(
         t1,
-        runner.RunError(test_failure("crash bang")),
+        runner.Failed(test_failure("crash bang")),
         12,
       ))
     })
@@ -563,13 +563,13 @@ pub fn execute_pooled_mixed_pass_fail_skip_test() {
 
   let platform =
     make_pooled_platform(fn(_groups, _workers) {
-      send_pool_result(runner.PoolResult(t1, runner.Ran, 5))
+      send_pool_result(runner.PoolResult(t1, runner.Passed, 5))
       send_pool_result(runner.PoolResult(
         t2,
-        runner.RunError(test_failure("assertion failed")),
+        runner.Failed(test_failure("assertion failed")),
         10,
       ))
-      send_pool_result(runner.PoolResult(t4, runner.RuntimeSkip, 2))
+      send_pool_result(runner.PoolResult(t4, runner.Skipped, 2))
     })
 
   use exec_result <- execute_sync_pooled(plan, 1, 1, platform, noop_callback)
@@ -608,7 +608,7 @@ pub fn execute_pooled_emits_skip_callbacks_test() {
     make_pooled_platform(fn(groups, _workers) {
       list.each(groups, fn(group) {
         list.each(group, fn(t) {
-          send_pool_result(runner.PoolResult(t, runner.Ran, 5))
+          send_pool_result(runner.PoolResult(t, runner.Passed, 5))
         })
       })
     })

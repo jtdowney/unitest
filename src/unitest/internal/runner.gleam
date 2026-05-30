@@ -9,12 +9,6 @@ import unitest/internal/cli
 import unitest/internal/discover
 import unitest/internal/test_failure.{type TestFailure}
 
-pub type TestRunResult {
-  Ran
-  RuntimeSkip
-  RunError(TestFailure)
-}
-
 pub type PlanItem {
   Run(discover.Test)
   Skip(discover.Test)
@@ -46,13 +40,13 @@ pub type Report {
 }
 
 pub type PoolResult {
-  PoolResult(item: discover.Test, result: TestRunResult, duration_ms: Int)
+  PoolResult(item: discover.Test, result: Outcome, duration_ms: Int)
 }
 
 pub type Platform {
   Platform(
     now_ms: fn() -> Int,
-    run_test: fn(discover.Test, fn(TestRunResult) -> Nil) -> Nil,
+    run_test: fn(discover.Test, fn(Outcome) -> Nil) -> Nil,
     start_module_pool: fn(List(List(discover.Test)), Int) -> Nil,
     receive_pool_result: fn(fn(PoolResult) -> Nil) -> Nil,
     print: fn(String) -> Nil,
@@ -317,15 +311,10 @@ fn apply_skip(
 
 fn process_run_result(
   t: discover.Test,
-  result: TestRunResult,
+  outcome: Outcome,
   duration: Int,
   state: ExecutionState,
 ) -> #(TestResult, ExecutionState) {
-  let outcome = case result {
-    Ran -> Passed
-    RuntimeSkip -> Skipped
-    RunError(err) -> Failed(err)
-  }
   let test_result = TestResult(item: t, outcome:, duration_ms: duration)
   #(test_result, add_result(state, test_result))
 }

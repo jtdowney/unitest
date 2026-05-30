@@ -42,7 +42,7 @@ get_end(Map) ->
 skip() ->
     throw({gleam_unitest, skip}).
 
-%% Run a test function and return ran, runtime_skip, or {run_error, TestFailure}
+%% Run a test function and return passed, skipped, or {failed, TestFailure}
 %% Test is a Gleam record: {test, Module, Name, Tags, FilePath, LineSpan}
 %% CheckResults: when true, treat Error results as test failures
 run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) ->
@@ -52,18 +52,18 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) 
     try Module:Name() of
         {error, Reason} when CheckResults =:= true ->
             Message = iolist_to_binary([<<"Test returned Error: ">>, gleam@string:inspect(Reason)]),
-            {run_error, generic_failure(Message)};
+            {failed, generic_failure(Message)};
         _ ->
-            ran
+            passed
     catch
         throw:{gleam_unitest, skip} ->
-            runtime_skip;
+            skipped;
         error:Reason:Stack ->
-            {run_error, parse_gleam_error(Reason, Stack)};
+            {failed, parse_gleam_error(Reason, Stack)};
         throw:Reason:Stack ->
-            {run_error, parse_gleam_error(Reason, Stack)};
+            {failed, parse_gleam_error(Reason, Stack)};
         exit:Reason:Stack ->
-            {run_error, parse_gleam_error(Reason, Stack)}
+            {failed, parse_gleam_error(Reason, Stack)}
     end.
 
 run_test_async(Test, _PackageName, CheckResults, Continuation) ->
@@ -359,7 +359,7 @@ build_crash_pool_result(Test, Reason) ->
     Message = iolist_to_binary(io_lib:format("Process crashed: ~p", [Reason])),
     #pool_result{
         item = Test,
-        result = {run_error, generic_failure(Message)},
+        result = {failed, generic_failure(Message)},
         duration_ms = 0
     }.
 

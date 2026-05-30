@@ -3,15 +3,15 @@ import gleam/dynamic/decode
 import unitest/internal/runner
 import unitest/internal/test_failure.{type TestFailure}
 
-pub fn decode_test_run_result(raw: Dynamic) -> runner.TestRunResult {
+pub fn decode_test_run_result(raw: Dynamic) -> runner.Outcome {
   let decoder = {
     use tag <- decode.field("kind", decode.string)
     case tag {
-      "ran" -> decode.success(runner.Ran)
-      "skip" -> decode.success(runner.RuntimeSkip)
+      "ran" -> decode.success(runner.Passed)
+      "skip" -> decode.success(runner.Skipped)
       "error" -> {
         use failure <- decode.then(decode_test_failure())
-        decode.success(runner.RunError(failure))
+        decode.success(runner.Failed(failure))
       }
       _ -> decode.success(make_crash_error("Unknown result kind"))
     }
@@ -23,8 +23,8 @@ pub fn decode_test_run_result(raw: Dynamic) -> runner.TestRunResult {
   }
 }
 
-pub fn make_crash_error(message: String) -> runner.TestRunResult {
-  runner.RunError(test_failure.TestFailure(
+pub fn make_crash_error(message: String) -> runner.Outcome {
+  runner.Failed(test_failure.TestFailure(
     message:,
     file: "",
     module: "",

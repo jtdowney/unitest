@@ -474,7 +474,7 @@ fn run_test_async(
   t: discover.Test,
   package_name: String,
   check_results: Bool,
-  k: fn(runner.TestRunResult) -> Nil,
+  k: fn(runner.Outcome) -> Nil,
 ) -> Nil
 
 @external(erlang, "unitest_ffi", "start_module_pool")
