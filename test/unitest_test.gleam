@@ -75,6 +75,11 @@ pub fn parse_package_name_empty_content_returns_error_test() {
   assert unitest.parse_package_name("") == Error(Nil)
 }
 
+pub fn parse_package_name_ignores_key_with_name_prefix_test() {
+  let content = "named_dep = \">= 1.0.0\"\nname = \"realpkg\""
+  assert unitest.parse_package_name(content) == Ok("realpkg")
+}
+
 pub fn resolve_package_name_returns_name_for_valid_content_test() {
   assert unitest.resolve_package_name(Ok(
       "name = \"unitest\"\nversion = \"1.0.0\"",

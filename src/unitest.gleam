@@ -512,17 +512,16 @@ fn get_package_name() -> Result(String, String) {
 pub fn parse_package_name(content: String) -> Result(String, Nil) {
   content
   |> string.split("\n")
-  |> list.find_map(fn(line) {
-    let trimmed = string.trim_start(line)
-    case string.starts_with(trimmed, "name") {
-      False -> Error(Nil)
-      True ->
-        case string.split(trimmed, "\"") {
-          [_, name, ..] -> Ok(name)
-          _ -> Error(Nil)
-        }
-    }
-  })
+  |> list.find_map(parse_name_line)
+}
+
+fn parse_name_line(line: String) -> Result(String, Nil) {
+  use #(key, value) <- result.try(string.split_once(line, "="))
+  use <- bool.guard(when: string.trim(key) != "name", return: Error(Nil))
+  case string.split(value, "\"") {
+    [_, name, ..] -> Ok(name)
+    _ -> Error(Nil)
+  }
 }
 
 @internal
