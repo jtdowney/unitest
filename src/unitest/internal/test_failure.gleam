@@ -262,20 +262,8 @@ pub fn extract_snippet(
   use content <- result.try(
     simplifile.read_bits(file) |> result.replace_error(Nil),
   )
-  use snippet_bits <- result.try(slice_bits(content, start, length))
+  use snippet_bits <- result.try(bit_array.slice(content, start, length))
   bit_array.to_string(snippet_bits)
   |> result.replace_error(Nil)
   |> result.map(string.trim)
-}
-
-fn slice_bits(
-  bits: BitArray,
-  start: Int,
-  length: Int,
-) -> Result(BitArray, Nil) {
-  let total = bit_array.byte_size(bits)
-  case start >= 0 && start + length <= total {
-    False -> Error(Nil)
-    True -> Ok(bit_array.slice(bits, start, length) |> result.unwrap(<<>>))
-  }
 }

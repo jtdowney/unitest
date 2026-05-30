@@ -196,13 +196,10 @@ fn resolve_filter(
   module_result: Result(String, Nil),
   tag_result: Result(String, Nil),
 ) -> Result(Filter, String) {
-  use location <- result.try(resolve_location(
-    test_result,
-    file_result,
-    module_result,
-  ))
-
-  Ok(Filter(location:, tag: option.from_result(tag_result)))
+  resolve_location(test_result, file_result, module_result)
+  |> result.map(fn(location) {
+    Filter(location:, tag: option.from_result(tag_result))
+  })
 }
 
 fn resolve_location(

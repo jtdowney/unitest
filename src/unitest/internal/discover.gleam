@@ -129,12 +129,8 @@ fn current_target() -> String {
 }
 
 fn parse_function(func: glance.Function) -> ParsedTest {
-  let tags = extract_tags_from_body(func.body)
+  let tags = list.flat_map(func.body, extract_tags_from_statement)
   ParsedTest(name: func.name, tags: list.unique(tags), byte_span: func.location)
-}
-
-fn extract_tags_from_body(statements: List(glance.Statement)) -> List(String) {
-  list.flat_map(statements, extract_tags_from_statement)
 }
 
 fn extract_tags_from_statement(stmt: glance.Statement) -> List(String) {
@@ -147,28 +143,20 @@ fn extract_tags_from_statement(stmt: glance.Statement) -> List(String) {
 
 fn extract_tags_from_expr(expr: glance.Expression) -> List(String) {
   case expr {
-    // unitest.tag("slow")
     glance.Call(
       function: glance.FieldAccess(
         container: glance.Variable(name: "unitest", ..),
-        label: "tag",
+        label:,
         ..,
       ),
       arguments: args,
       ..,
-    ) -> extract_single_tag(args)
-
-    // unitest.tags(["slow", "db"])
-    glance.Call(
-      function: glance.FieldAccess(
-        container: glance.Variable(name: "unitest", ..),
-        label: "tags",
-        ..,
-      ),
-      arguments: args,
-      ..,
-    ) -> extract_tags_list(args)
-
+    ) ->
+      case label {
+        "tag" -> extract_single_tag(args)
+        "tags" -> extract_tags_list(args)
+        _ -> []
+      }
     _ -> []
   }
 }

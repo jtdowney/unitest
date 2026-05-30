@@ -73,9 +73,8 @@ fn sort_results(
     cli.NativeSort, True -> list.reverse(results)
     cli.TimeSort, reversed ->
       list.sort(results, fn(a, b) { compare_by_time(a, b, reversed) })
-    cli.NameSort, False ->
-      list.sort(results, fn(a, b) { compare_by_name(a, b) })
-    cli.NameSort, True -> list.sort(results, fn(a, b) { compare_by_name(b, a) })
+    cli.NameSort, False -> list.sort(results, compare_by_name)
+    cli.NameSort, True -> list.sort(results, order.reverse(compare_by_name))
   }
 }
 
