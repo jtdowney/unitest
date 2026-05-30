@@ -210,6 +210,7 @@ pub fn resolve_execution_mode(
   cli_workers: Option(Int),
   option_mode: ExecutionMode,
   runtime_default: Int,
+  runnable_count: Int,
 ) -> ResolvedExecutionMode {
   case cli_workers {
     option.Some(n) -> ResolvedParallel(n)
@@ -218,7 +219,11 @@ pub fn resolve_execution_mode(
         RunSequential -> ResolvedSequential
         RunAsync -> ResolvedAsync
         RunParallel(n) -> ResolvedParallel(n)
-        RunParallelAuto -> ResolvedParallel(runtime_default)
+        RunParallelAuto ->
+          case runnable_count < parallel_threshold {
+            True -> ResolvedAsync
+            False -> ResolvedParallel(runtime_default)
+          }
       }
   }
 }
@@ -287,11 +292,7 @@ fn run_with_cli_opts(cli_opts: cli.Options, options: Options) -> Nil {
       cli_opts.workers,
       options.execution_mode,
       default_workers(),
-    )
-    |> apply_parallel_threshold(
       runnable_count,
-      options.execution_mode,
-      cli_opts.workers,
     )
 
   execute_and_finish(
@@ -317,22 +318,6 @@ fn shuffle_by_groups(groups: List(List(a))) -> random.Generator(List(a)) {
       })
     })
   })
-}
-
-@internal
-pub fn apply_parallel_threshold(
-  mode: ResolvedExecutionMode,
-  runnable_count: Int,
-  option_mode: ExecutionMode,
-  cli_workers: Option(Int),
-) -> ResolvedExecutionMode {
-  use <- bool.guard(when: option.is_some(cli_workers), return: mode)
-  case option_mode, mode {
-    RunParallelAuto, ResolvedParallel(_)
-      if runnable_count < parallel_threshold
-    -> ResolvedAsync
-    _, _ -> mode
-  }
 }
 
 fn execute_and_finish(
