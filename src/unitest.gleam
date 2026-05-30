@@ -266,6 +266,14 @@ fn run_with_cli_opts(cli_opts: cli.Options, options: Options) -> Nil {
   let use_color = should_use_color(cli_opts.no_color)
   let tests = discover.discover_from_fs(options.test_directory)
 
+  case list.is_empty(tests) {
+    True ->
+      io.println_error(
+        "Warning: no tests found in '" <> options.test_directory <> "'",
+      )
+    False -> Nil
+  }
+
   let chosen_seed =
     option.or(cli_opts.seed, options.seed)
     |> option.lazy_unwrap(fn() { int.random(2_147_483_647) })
