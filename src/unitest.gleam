@@ -221,7 +221,7 @@ pub fn resolve_execution_mode(
         RunParallel(n) -> ResolvedParallel(n)
         RunParallelAuto ->
           case runnable_count < parallel_threshold {
-            True -> ResolvedAsync
+            True -> ResolvedSequential
             False -> ResolvedParallel(runtime_default)
           }
       }

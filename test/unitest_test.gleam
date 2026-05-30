@@ -166,14 +166,14 @@ pub fn resolve_execution_mode_auto_above_threshold_resolves_to_parallel_test() {
     == unitest.ResolvedParallel(12)
 }
 
-pub fn resolve_execution_mode_auto_below_threshold_downgrades_to_async_test() {
+pub fn resolve_execution_mode_auto_below_threshold_downgrades_to_sequential_test() {
   assert unitest.resolve_execution_mode(
       option.None,
       unitest.RunParallelAuto,
       12,
       10,
     )
-    == unitest.ResolvedAsync
+    == unitest.ResolvedSequential
 }
 
 pub fn resolve_execution_mode_explicit_parallel_ignores_threshold_test() {
