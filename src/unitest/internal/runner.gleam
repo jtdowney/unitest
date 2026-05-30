@@ -160,6 +160,18 @@ pub type ExecuteResult {
   ExecuteResult(report: Report, results: List(TestResult))
 }
 
+fn finalize(
+  state: ExecutionState,
+  seed: Int,
+  start_ms: Int,
+  platform: Platform,
+  on_complete: fn(ExecuteResult) -> Nil,
+) -> Nil {
+  let runtime_ms = platform.now_ms() - start_ms
+  let report = build_report(state, seed, runtime_ms)
+  on_complete(ExecuteResult(report:, results: list.reverse(state.results)))
+}
+
 pub fn execute_sequential(
   plan: List(PlanItem),
   seed: Int,
@@ -186,14 +198,7 @@ fn execute_loop(
   ctx: LoopContext,
 ) -> Nil {
   case plan {
-    [] -> {
-      let runtime_ms = ctx.platform.now_ms() - ctx.start_ms
-      let report = build_report(state, ctx.seed, runtime_ms)
-      ctx.on_complete(ExecuteResult(
-        report:,
-        results: list.reverse(state.results),
-      ))
-    }
+    [] -> finalize(state, ctx.seed, ctx.start_ms, ctx.platform, ctx.on_complete)
     [Skip(t), ..rest] -> {
       let #(result, new_state) = apply_skip(t, state)
       let progress = Progress(current: new_state.idx, total: ctx.total)
@@ -237,12 +242,7 @@ pub fn execute_pooled(
   let remaining = list.length(tests)
 
   let finish = fn(final_state) {
-    let runtime_ms = platform.now_ms() - start_ms
-    let report = build_report(final_state, seed, runtime_ms)
-    on_complete(ExecuteResult(
-      report:,
-      results: list.reverse(final_state.results),
-    ))
+    finalize(final_state, seed, start_ms, platform, on_complete)
   }
 
   case tests {
