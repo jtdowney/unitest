@@ -239,7 +239,7 @@ fn format_assertion_with_labels(
 
       #(snippet, values)
     }
-    _ -> #(snippet, format_values(Assert(0, 0, 0, kind), use_color))
+    _ -> #(snippet, format_assert_values(kind, use_color))
   }
 }
 
