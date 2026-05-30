@@ -53,14 +53,7 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) 
     try Module:Name() of
         {error, Reason} when CheckResults =:= true ->
             Message = iolist_to_binary([<<"Test returned Error: ">>, gleam@string:inspect(Reason)]),
-            {run_error, #test_failure{
-                message = Message,
-                file = <<>>,
-                module = <<>>,
-                function = <<>>,
-                line = 0,
-                kind = generic
-            }};
+            {run_error, generic_failure(Message)};
         _ ->
             ran
     catch
@@ -97,47 +90,46 @@ parse_gleam_error(undef, Stack) ->
 parse_gleam_error(Reason, Stack) ->
     build_generic_panic(Reason, Stack).
 
-build_assert_panic(Map) ->
+base_failure(Map, DefaultMessage, Kind) ->
     #test_failure{
-        message = maps:get(message, Map, <<"Assertion failed">>),
-        file = get_file(Map),
-        module = get_module(Map),
-        function = get_function(Map),
-        line = get_line(Map),
-        kind =
-            #assert{
-                start = get_start(Map),
-                'end' = get_end(Map),
-                expression_start = maps:get(expression_start, Map, 0),
-                kind = build_assert_kind(Map)
-            }
-    }.
-
-build_let_assert_panic(Map) ->
-    Value = maps:get(value, Map, undefined),
-    #test_failure{
-        message = maps:get(message, Map, <<"Let assert failed">>),
-        file = get_file(Map),
-        module = get_module(Map),
-        function = get_function(Map),
-        line = get_line(Map),
-        kind =
-            #let_assert{
-                start = get_start(Map),
-                'end' = get_end(Map),
-                value = gleam@string:inspect(Value)
-            }
-    }.
-
-build_simple_panic(Map, Kind) ->
-    #test_failure{
-        message = maps:get(message, Map, <<"Panic">>),
+        message = maps:get(message, Map, DefaultMessage),
         file = get_file(Map),
         module = get_module(Map),
         function = get_function(Map),
         line = get_line(Map),
         kind = Kind
     }.
+
+generic_failure(Message) ->
+    #test_failure{
+        message = Message,
+        file = <<>>,
+        module = <<>>,
+        function = <<>>,
+        line = 0,
+        kind = generic
+    }.
+
+build_assert_panic(Map) ->
+    Kind = #assert{
+        start = get_start(Map),
+        'end' = get_end(Map),
+        expression_start = maps:get(expression_start, Map, 0),
+        kind = build_assert_kind(Map)
+    },
+    base_failure(Map, <<"Assertion failed">>, Kind).
+
+build_let_assert_panic(Map) ->
+    Value = maps:get(value, Map, undefined),
+    Kind = #let_assert{
+        start = get_start(Map),
+        'end' = get_end(Map),
+        value = gleam@string:inspect(Value)
+    },
+    base_failure(Map, <<"Let assert failed">>, Kind).
+
+build_simple_panic(Map, Kind) ->
+    base_failure(Map, <<"Panic">>, Kind).
 
 %% Build panic for undefined function errors
 build_undef_panic([{M, F, A, _Info} | _Rest]) ->
@@ -149,23 +141,9 @@ build_undef_panic([{M, F, A, _Info} | _Rest]) ->
                 N
         end,
     Message = iolist_to_binary(io_lib:format("Undefined function: ~s:~s/~B", [M, F, Arity])),
-    #test_failure{
-        message = Message,
-        file = <<>>,
-        module = <<>>,
-        function = <<>>,
-        line = 0,
-        kind = generic
-    };
+    generic_failure(Message);
 build_undef_panic(_) ->
-    #test_failure{
-        message = <<"Undefined function">>,
-        file = <<>>,
-        module = <<>>,
-        function = <<>>,
-        line = 0,
-        kind = generic
-    }.
+    generic_failure(<<"Undefined function">>).
 
 %% Build panic for generic/unknown errors
 build_generic_panic(Reason, Stack) ->
@@ -178,14 +156,7 @@ build_generic_panic(Reason, Stack) ->
             _ ->
                 <<BaseMessage/binary, "\n", StackInfo/binary>>
         end,
-    #test_failure{
-        message = Message,
-        file = <<>>,
-        module = <<>>,
-        function = <<>>,
-        line = 0,
-        kind = generic
-    }.
+    generic_failure(Message).
 
 %% Format a brief stack summary (first meaningful frame)
 format_stack_summary([{M, F, A, Info} | _]) ->
@@ -390,15 +361,7 @@ build_crash_pool_result(Test, Reason) ->
     Message = iolist_to_binary(io_lib:format("Process crashed: ~p", [Reason])),
     #pool_result{
         item = Test,
-        result =
-            {run_error, #test_failure{
-                message = Message,
-                file = <<>>,
-                module = <<>>,
-                function = <<>>,
-                line = 0,
-                kind = generic
-            }},
+        result = {run_error, generic_failure(Message)},
         duration_ms = 0
     }.
 
