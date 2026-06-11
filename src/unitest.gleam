@@ -53,19 +53,6 @@ pub type SortOrder {
 }
 
 /// Configuration for the test run.
-///
-/// Tests with any `ignored_tags` are skipped and reported as `S`.
-/// When `check_results` is `True`, tests returning `Error(reason)`
-/// are treated as failures (default `False`).
-///
-/// ## Example
-///
-/// ```gleam
-/// unitest.defaults()
-/// |> unitest.ignored_tags(["slow"])
-/// |> unitest.execution_mode(unitest.RunParallelAuto)
-/// |> unitest.run
-/// ```
 pub opaque type Options {
   Options(
     seed: Option(Int),
@@ -134,7 +121,7 @@ pub fn execution_mode(options: Options, mode: ExecutionMode) -> Options {
 ///   // runs only if both conditions are true
 /// }
 /// ```
-pub fn guard(condition: Bool, next: fn() -> a) -> a {
+pub fn guard(when condition: Bool, otherwise next: fn() -> a) -> a {
   bool.lazy_guard(when: !condition, return: skip, otherwise: next)
 }
 
@@ -147,14 +134,6 @@ pub fn ignored_tags(options: Options, tags: List(String)) -> Options {
 ///
 /// This is a drop-in replacement for `gleeunit.main()`. Call this from your
 /// test file's `main` function if you don't need custom options.
-///
-/// ## Example
-///
-/// ```gleam
-/// pub fn main() {
-///   unitest.main()
-/// }
-/// ```
 pub fn main() -> Nil {
   run(defaults())
 }
@@ -163,32 +142,6 @@ pub fn main() -> Nil {
 ///
 /// Discovers test files, applies CLI filters, shuffles with the
 /// selected seed, executes, and prints results.
-///
-/// ## CLI Arguments
-///
-/// Pass arguments after `--` when running `gleam test`:
-///
-/// - `<file>` or `<file>:<line>`: Run tests in a file, optionally at a line
-/// - `--test <module.fn>`: Run a single test function
-/// - `--tag <name>`: Run only tests with this tag
-/// - `--seed <int>`: Reproducible ordering
-/// - `--reporter <dot|table>`: Output format (default: dot)
-/// - `--sort <native|time|name>`: Sort order for table reporter
-/// - `--sort-rev`: Reverse the table sort order (toggles the configured
-///   `sort_reversed` default)
-/// - `--workers <int>`: Run tests in parallel with this many workers
-/// - `--timeout <ms>`: Per-test timeout in milliseconds (0 disables)
-/// - `--no-color`: Disable colored output
-///
-/// ## Example
-///
-/// ```gleam
-/// pub fn main() {
-///   unitest.defaults()
-///   |> unitest.ignored_tags(["slow"])
-///   |> unitest.run
-/// }
-/// ```
 pub fn run(options: Options) -> Nil {
   let args = argv.load().arguments
   run_with_args(args, options)
@@ -213,7 +166,6 @@ pub fn sort_reversed(options: Options, reversed: Bool) -> Options {
 }
 
 /// Use the table reporter by default instead of the dot reporter.
-/// The `--reporter` CLI flag overrides this.
 pub fn table_reporter(options: Options) -> Options {
   Options(..options, reporter: TableReporter)
 }
@@ -223,17 +175,6 @@ pub fn table_reporter(options: Options) -> Options {
 /// Use with Gleam's `use` syntax at the start of a test function.
 /// Tags must be string literals: discovery reads them from source, and a
 /// non-literal argument is ignored by filtering and reported with a warning.
-///
-/// ## Example
-///
-/// ```gleam
-/// pub fn database_integration_test() {
-///   use <- unitest.tag("integration")
-///   // test code here
-/// }
-/// ```
-///
-/// Then run: `gleam test -- --tag integration`
 pub fn tag(_tag: String, next: fn() -> a) -> a {
   next()
 }
@@ -244,15 +185,6 @@ pub fn tag(_tag: String, next: fn() -> a) -> a {
 /// Tags must be string literals: discovery reads them from source, and
 /// non-literal list elements are ignored by filtering and reported with a
 /// warning.
-///
-/// ## Example
-///
-/// ```gleam
-/// pub fn slow_integration_test() {
-///   use <- unitest.tags(["slow", "integration"])
-///   // test code here
-/// }
-/// ```
 pub fn tags(_tags: List(String), next: fn() -> a) -> a {
   next()
 }
