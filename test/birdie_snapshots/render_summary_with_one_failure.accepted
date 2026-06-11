@@ -1,0 +1,17 @@
+---
+version: 2.0.0
+title: render_summary with one failure
+file: ./test/unitest_test.gleam
+test_name: render_summary_one_failure_test
+---
+
+
+2 passed, 1 failure
+Finished in 100ms
+Seed: 42
+
+
+Failures:
+1) foo.bad_test (5ms)
+   test/foo.gleam:12
+   boom

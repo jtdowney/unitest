@@ -1,12 +1,77 @@
-import { SKIP_SYMBOL, runTestRaw } from "./unitest_common_ffi.mjs";
+import { milliseconds as millisecondsToDuration } from "../gleam_time/gleam/time/duration.mjs";
 import {
-  decode_test_run_result as decodeTestRunResult,
-  make_crash_error as makeCrashError,
-} from "./unitest/internal/js_decode.mjs";
-import { PoolResult$PoolResult as poolResult } from "./unitest/internal/runner.mjs";
+  SKIP_SYMBOL,
+  runTest as runTestCommon,
+  parseStack,
+  timeoutResult,
+} from "./unitest_common_ffi.mjs";
+import { TestResult$TestResult as testResult } from "./unitest.mjs";
+import { from_dynamic as decodeTestRunResult } from "./unitest/internal/outcome.mjs";
+
+// Extra slack on the parent watchdog past timeoutMs. The worker times out async
+// tests precisely on its own; this margin keeps the watchdog (a sync-hang
+// backstop) from racing that and terminating a worker that was about to report.
+const WORKER_WATCHDOG_GRACE_MS = 100;
 
 function formatError(err) {
   return err == null ? String(err) : err.message || String(err);
+}
+
+function makeGenericError(message) {
+  return decodeTestRunResult({ kind: "error", message });
+}
+
+function crashedOutcome(error) {
+  return decodeTestRunResult({
+    kind: "error",
+    failureKind: {
+      type: "crashed",
+      reason: formatError(error),
+      stack: parseStack(error),
+    },
+  });
+}
+
+// Main-thread timeout for the sequential, async, and promise-fallback paths.
+function withTimeout(promise, timeoutMs) {
+  if (!timeoutMs || timeoutMs <= 0)
+    return promise.then(
+      (r) => ({ outcome: r }),
+      (err) => ({ error: err }),
+    );
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve({ timedOut: true });
+    }, timeoutMs);
+    promise.then(
+      (r) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ outcome: r });
+      },
+      (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ error: err });
+      },
+    );
+  });
+}
+
+// Map a settled withTimeout record onto a decoded test outcome.
+function settledToOutcome(result, timeoutMs) {
+  if (result.timedOut) {
+    return decodeTestRunResult(timeoutResult(timeoutMs));
+  }
+  if (result.error !== undefined) {
+    return crashedOutcome(result.error);
+  }
+  return result.outcome;
 }
 
 function detectRuntime() {
@@ -33,7 +98,7 @@ export function defaultWorkers() {
 }
 
 export function nowMs() {
-  return Date.now();
+  return Math.round(performance.now());
 }
 
 export function halt(code) {
@@ -61,22 +126,28 @@ async function runTest(test, packageName, checkResults) {
     `../${packageName}/${test.module}.mjs`,
     import.meta.url,
   ).href;
-  const raw = await runTestRaw(moduleUrl, test.name, checkResults);
+  const raw = await runTestCommon(
+    moduleUrl,
+    test.name,
+    checkResults,
+    test.module,
+  );
   return decodeTestRunResult(raw);
 }
 
-export function runTestAsync(test, packageName, checkResults, next) {
-  runTest(test, packageName, checkResults)
-    .then((result) => {
-      next(result);
-    })
-    .catch((err) => {
-      next(makeCrashError(formatError(err)));
-    });
+export function runTestAsync(test, packageName, checkResults, timeoutMs, next) {
+  withTimeout(runTest(test, packageName, checkResults), timeoutMs).then(
+    (result) => next(settledToOutcome(result, timeoutMs)),
+  );
 }
 
 let poolResultQueue = [];
 let poolWaitingCallback = null;
+
+function resetPoolState() {
+  poolResultQueue = [];
+  poolWaitingCallback = null;
+}
 
 function deliverPoolResult(pr) {
   if (poolWaitingCallback) {
@@ -88,28 +159,62 @@ function deliverPoolResult(pr) {
   }
 }
 
+function gleamGroupsToArrays(moduleGroups) {
+  return moduleGroups.toArray().map((g) => g.toArray());
+}
+
 export function startModulePool(
   moduleGroups,
   packageName,
   checkResults,
+  timeoutMs,
   workers,
 ) {
-  poolResultQueue = [];
-  poolWaitingCallback = null;
+  resetPoolState();
+  const groups = gleamGroupsToArrays(moduleGroups);
 
   if (nodeWorkerThreads) {
     try {
-      startWithWorkerThreads(moduleGroups, packageName, checkResults, workers);
+      startWithWorkerThreads(
+        groups,
+        packageName,
+        checkResults,
+        timeoutMs,
+        workers,
+      );
     } catch {
-      startWithPromises(moduleGroups, packageName, checkResults, workers);
+      startWithPromises(groups, packageName, checkResults, timeoutMs, workers);
     }
   } else {
-    startWithPromises(moduleGroups, packageName, checkResults, workers);
+    startWithPromises(groups, packageName, checkResults, timeoutMs, workers);
   }
 }
 
-function startWithPromises(moduleGroups, packageName, checkResults, workers) {
-  const queue = moduleGroups.toArray().map((g) => g.toArray());
+export function startAsyncPool(
+  moduleGroups,
+  packageName,
+  checkResults,
+  timeoutMs,
+  workers,
+) {
+  resetPoolState();
+  startWithPromises(
+    gleamGroupsToArrays(moduleGroups),
+    packageName,
+    checkResults,
+    timeoutMs,
+    workers,
+  );
+}
+
+function startWithPromises(
+  groups,
+  packageName,
+  checkResults,
+  timeoutMs,
+  workers,
+) {
+  const queue = [...groups];
   let inFlight = 0;
   const limit = Math.max(1, workers | 0);
   const testLimit = defaultWorkers();
@@ -128,14 +233,14 @@ function startWithPromises(moduleGroups, packageName, checkResults, workers) {
           const test = tests[testIndex++];
           testInFlight += 1;
           const start = nowMs();
-          runTest(test, packageName, checkResults)
-            .then((result) => {
-              deliverPoolResult(poolResult(test, result, nowMs() - start));
-            })
-            .catch((err) => {
-              const msg = formatError(err);
+          withTimeout(runTest(test, packageName, checkResults), timeoutMs)
+            .then((r) => {
               deliverPoolResult(
-                poolResult(test, makeCrashError(msg), nowMs() - start),
+                testResult(
+                  test,
+                  settledToOutcome(r, timeoutMs),
+                  millisecondsToDuration(nowMs() - start),
+                ),
               );
             })
             .finally(() => {
@@ -157,14 +262,30 @@ function startWithPromises(moduleGroups, packageName, checkResults, workers) {
   pump();
 }
 
+// Regroup a flat run of tests by module so the promise fallback keeps its
+// per-module-group concurrency semantics.
+function groupByModule(tests) {
+  const groups = [];
+  let current = null;
+  for (const test of tests) {
+    if (current === null || current[0].module !== test.module) {
+      current = [];
+      groups.push(current);
+    }
+    current.push(test);
+  }
+  return groups;
+}
+
 function startWithWorkerThreads(
-  moduleGroups,
+  groups,
   packageName,
   checkResults,
+  timeoutMs,
   workers,
 ) {
   const { Worker } = nodeWorkerThreads;
-  const queue = moduleGroups.toArray().map((g) => g.toArray());
+  const queue = groups.flat();
   const limit = Math.max(1, workers | 0);
   const workerCount = Math.min(limit, queue.length);
 
@@ -172,65 +293,100 @@ function startWithWorkerThreads(
 
   const workerUrl = new URL("./unitest_worker_ffi.mjs", import.meta.url);
 
-  let dispatchIndex = 0;
-  const allTests = queue.flat();
-  const batches = [];
-  let globalIdx = 0;
-  for (const group of queue) {
-    batches.push({ tests: group, globalStartIndex: globalIdx });
-    globalIdx += group.length;
-  }
-
   let workerFailures = 0;
   const maxWorkerFailures = 3;
 
-  function dispatch(w) {
-    if (dispatchIndex >= batches.length) {
+  // Backstop for *synchronous* hangs only: the worker times out async tests
+  // itself, so this watchdog just catches a worker wedged by sync code that
+  // blocks its event loop.
+  const watchdogMs = timeoutMs + WORKER_WATCHDOG_GRACE_MS;
+  function armWatchdog(w) {
+    if (timeoutMs && timeoutMs > 0) {
+      w._watchdog = setTimeout(() => {
+        w._timedOut = true;
+        w.terminate();
+      }, watchdogMs);
+    }
+  }
+
+  function clearWatchdog(w) {
+    if (w._watchdog) {
+      clearTimeout(w._watchdog);
+      w._watchdog = null;
+    }
+  }
+
+  // Send exactly one test from the shared queue and arm a fresh per-test
+  // watchdog.
+  function sendNext(w) {
+    const test = queue.shift();
+    if (test === undefined) {
+      w._done = true;
       w.terminate();
       return;
     }
-    const batchIdx = dispatchIndex++;
-    const batch = batches[batchIdx];
-    w._pendingTests = new Set(batch.tests);
-    w._pendingCount = batch.tests.length;
+    w._activeTest = test;
+    w._timedOut = false;
+    armWatchdog(w);
+    w.postMessage({
+      type: "run",
+      moduleUrl: new URL(
+        `../${packageName}/${test.module}.mjs`,
+        import.meta.url,
+      ).href,
+      moduleName: test.module,
+      fnName: test.name,
+      checkResults,
+      timeoutMs,
+    });
+  }
 
-    for (let i = 0; i < batch.tests.length; i++) {
-      const test = batch.tests[i];
-      w.postMessage({
-        type: "run",
-        testIndex: batch.globalStartIndex + i,
-        moduleUrl: new URL(
-          `../${packageName}/${test.module}.mjs`,
-          import.meta.url,
-        ).href,
-        fnName: test.name,
-        checkResults,
-      });
+  function isAsyncTimeoutResult(result) {
+    return result?.failureKind?.type === "timeout";
+  }
+
+  function recycleWorker(w) {
+    w._done = true;
+    w.terminate();
+    if (queue.length > 0) {
+      spawnWorker();
     }
   }
 
   function handleWorkerDeath(w, reason) {
-    if (w._dead) return;
+    if (w._dead || w._done) return;
     w._dead = true;
 
-    if (w._pendingTests && w._pendingTests.size > 0) {
-      for (const test of w._pendingTests) {
-        deliverPoolResult(poolResult(test, makeCrashError(reason), 0));
-      }
-      w._pendingTests = null;
+    clearWatchdog(w);
+    const outcome = w._timedOut
+      ? decodeTestRunResult(timeoutResult(timeoutMs))
+      : makeGenericError(reason);
+
+    if (w._activeTest) {
+      deliverPoolResult(
+        testResult(w._activeTest, outcome, millisecondsToDuration(0)),
+      );
+      w._activeTest = null;
     }
 
-    workerFailures++;
+    // Watchdog kills are the test's fault, not the worker's — don't count
+    // them, or sync-hang storms would exhaust the cap into the main-thread
+    // fallback where a hang cannot be interrupted.
+    if (!w._timedOut) {
+      workerFailures++;
+    }
     if (workerFailures >= maxWorkerFailures) {
-      const remaining = batches.slice(dispatchIndex);
-      dispatchIndex = batches.length;
+      const remaining = queue.splice(0, queue.length);
       if (remaining.length > 0) {
-        const fakeGroups = {
-          toArray: () => remaining.map((b) => ({ toArray: () => b.tests })),
-        };
-        startWithPromises(fakeGroups, packageName, checkResults, workers);
+        startWithPromises(
+          groupByModule(remaining),
+          packageName,
+          checkResults,
+          timeoutMs,
+          workers,
+        );
       }
-    } else if (dispatchIndex < batches.length) {
+    } else if (queue.length > 0) {
       spawnWorker();
     }
   }
@@ -240,18 +396,28 @@ function startWithWorkerThreads(
 
     w.on("message", (msg) => {
       if (msg.type === "ready") {
-        dispatch(w);
+        sendNext(w);
       } else if (msg.type === "result") {
-        const test = allTests[msg.testIndex];
-        if (w._pendingTests) {
-          w._pendingTests.delete(test);
+        clearWatchdog(w);
+        const test = w._activeTest;
+        w._activeTest = null;
+        if (test) {
+          deliverPoolResult(
+            testResult(
+              test,
+              decodeTestRunResult(msg.result),
+              millisecondsToDuration(msg.durationMs),
+            ),
+          );
         }
-        deliverPoolResult(
-          poolResult(test, decodeTestRunResult(msg.result), msg.durationMs),
-        );
-        w._pendingCount -= 1;
-        if (w._pendingCount === 0) {
-          dispatch(w);
+        if (isAsyncTimeoutResult(msg.result)) {
+          // Promise.race cannot cancel the losing test; it is still running
+          // inside this worker. Recycle the worker so its side effects cannot
+          // interfere with later tests. Deliberate, so it does not count
+          // toward the worker failure cap.
+          recycleWorker(w);
+        } else {
+          sendNext(w);
         }
       }
     });

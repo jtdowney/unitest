@@ -1,0 +1,13 @@
+pub fn plain_test() {
+  Nil
+}
+
+@target(erlang)
+pub fn erlang_only_test() {
+  Nil
+}
+
+@target(javascript)
+pub fn javascript_only_test() {
+  Nil
+}

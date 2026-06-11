@@ -11,9 +11,16 @@ export function genericError(message) {
   return { kind: "error", message };
 }
 
-function formatGenericError(error) {
+export function timeoutResult(timeoutMs) {
+  return {
+    kind: "error",
+    failureKind: { type: "timeout", timeout_ms: timeoutMs },
+  };
+}
+
+function translateError(error) {
   if (error == null) {
-    return "";
+    return { recognized: true, message: "" };
   }
 
   const errorMessage = error.message || String(error);
@@ -29,33 +36,91 @@ function formatGenericError(error) {
         /does not provide an export named ['"]([^'"]+)['"]/,
       );
       if (exportMatch) {
-        return `Undefined function: ${exportMatch[1]}`;
+        return {
+          recognized: true,
+          message: `Undefined function: ${exportMatch[1]}`,
+        };
       }
     }
     const moduleMatch = errorMessage.match(
       /Cannot find module ['"]([^'"]+)['"]/,
     );
     if (moduleMatch) {
-      return `Module not found: ${moduleMatch[1]}`;
+      return {
+        recognized: true,
+        message: `Module not found: ${moduleMatch[1]}`,
+      };
     }
-    return errorMessage;
+    return { recognized: true, message: errorMessage };
   }
 
   if (error instanceof TypeError) {
     const undefMatch = errorMessage.match(/(\w+) is not a function/);
     if (undefMatch) {
-      return `Undefined function: ${undefMatch[1]}`;
+      return {
+        recognized: true,
+        message: `Undefined function: ${undefMatch[1]}`,
+      };
     }
   }
 
   if (error instanceof ReferenceError) {
     const refMatch = errorMessage.match(/(\w+) is not defined/);
     if (refMatch) {
-      return `Undefined: ${refMatch[1]}`;
+      return { recognized: true, message: `Undefined: ${refMatch[1]}` };
     }
   }
 
-  return errorMessage;
+  return { recognized: false, message: errorMessage };
+}
+
+export function parseStack(error) {
+  if (!error || typeof error.stack !== "string") {
+    return [];
+  }
+
+  const frames = [];
+  for (const line of error.stack.split("\n")) {
+    const frame = parseStackLine(line);
+    if (frame) {
+      frames.push(frame);
+    }
+  }
+  return frames;
+}
+
+function parseStackLine(line) {
+  const text = line.trim();
+  if (!text.startsWith("at ")) {
+    return null;
+  }
+
+  let functionName = "";
+  let location = text.slice(3);
+  const named = text.match(/^at (.+?) \((.+)\)$/);
+  if (named) {
+    functionName = named[1];
+    location = named[2];
+  }
+
+  const locationMatch = location.match(/^(.*):(\d+):(\d+)$/);
+  if (!locationMatch) {
+    return null;
+  }
+
+  const file = locationMatch[1].replace(/^file:\/\//, "");
+  const base = file.split(/[\\/]/).pop() || file;
+  const name = functionName
+    .replace(/^(async|new) /, "")
+    .split(".")
+    .pop();
+  return {
+    module: base.replace(/\.[^.]+$/, ""),
+    function: name || "<anonymous>",
+    arity: 0,
+    file,
+    line: Number(locationMatch[2]),
+  };
 }
 
 function serializeAssertedExpr(expr) {
@@ -114,14 +179,12 @@ function serializeError(e) {
     const base = {
       message: e.message || "Unknown error",
       file: e.file || "",
-      module: e.module || "",
-      fn: e.function || "",
       line: e.line || 0,
     };
 
     switch (e.gleam_error) {
       case "assert":
-        base.panicKind = {
+        base.failureKind = {
           type: "assert",
           start: e.start || 0,
           end: e.end || 0,
@@ -129,13 +192,13 @@ function serializeError(e) {
         };
         break;
       case "panic":
-        base.panicKind = { type: "panic" };
+        base.failureKind = { type: "panic" };
         break;
       case "todo":
-        base.panicKind = { type: "todo" };
+        base.failureKind = { type: "todo" };
         break;
       case "let_assert":
-        base.panicKind = {
+        base.failureKind = {
           type: "let_assert",
           start: e.start || 0,
           end: e.end || 0,
@@ -146,10 +209,22 @@ function serializeError(e) {
     return base;
   }
 
-  return { message: formatGenericError(e) };
+  const { recognized, message } = translateError(e);
+  if (recognized) {
+    return { message };
+  }
+
+  return {
+    failureKind: { type: "crashed", reason: message, stack: parseStack(e) },
+  };
 }
 
-export async function runTestRaw(moduleUrl, fnName, checkResults) {
+export async function runTest(
+  moduleUrl,
+  fnName,
+  checkResults,
+  moduleName = "",
+) {
   try {
     const mod = await import(moduleUrl);
     if (typeof mod[fnName] === "function") {
@@ -160,7 +235,15 @@ export async function runTestRaw(moduleUrl, fnName, checkResults) {
       }
       return { kind: "ran" };
     } else {
-      return genericError(`Function ${fnName} not found in module`);
+      return {
+        kind: "error",
+        failureKind: {
+          type: "undef",
+          module: moduleName,
+          function: fnName,
+          arity: 0,
+        },
+      };
     }
   } catch (e) {
     if (isSkipException(e)) {

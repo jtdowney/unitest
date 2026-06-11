@@ -1,0 +1,12 @@
+---
+version: 2.0.0
+title: format_failure labels literal values
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_labels_literal_values_test
+---
+1) m.t (< 1ms)
+
+     assert 5 == 6
+
+   left:  5 (literal)
+   right: 6 (literal)

@@ -1,7 +1,7 @@
 ---
-version: 1.5.3
+version: 2.0.0
 title: no color mode shows PASS/FAIL/SKIP text
-file: ./test/unitest/internal/format_table_test.gleam
+file: ./test/unitest_test.gleam
 test_name: no_color_mode_test
 ---
 +--------+--------+-------------+----------+

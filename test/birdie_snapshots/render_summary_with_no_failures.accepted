@@ -1,0 +1,11 @@
+---
+version: 2.0.0
+title: render_summary with no failures
+file: ./test/unitest_test.gleam
+test_name: render_summary_no_failures_test
+---
+
+
+5 passed, no failures
+Finished in 100ms
+Seed: 12345

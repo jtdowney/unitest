@@ -11,13 +11,10 @@ pub fn main() {
   // Skip "slow" and "failure_demo" tagged tests by default
   // Run failure demos with: gleam test -- --tag failure_demo
   // Enable check_results so Error results are treated as failures
-  unitest.run(
-    unitest.Options(
-      ..unitest.default_options(),
-      ignored_tags: ["slow", "failure_demo"],
-      check_results: True,
-    ),
-  )
+  unitest.defaults()
+  |> unitest.ignored_tags(["slow", "failure_demo"])
+  |> unitest.check_results(True)
+  |> unitest.run
 }
 
 pub fn add_positive_numbers_test() {
@@ -113,6 +110,13 @@ pub fn failure_demo_todo_test() {
 pub fn failure_demo_undefined_function_test() {
   use <- unitest.tag("failure_demo")
   demo.call_undefined()
+}
+
+/// Demo: Crashed program with a stack trace
+/// Shows the crash reason plus several module:function/arity at file:line frames
+pub fn failure_demo_crash_test() {
+  use <- unitest.tag("failure_demo")
+  demo.deep_crash()
 }
 
 /// Demo: Returning Error Result

@@ -1,7 +1,7 @@
 ---
-version: 1.5.3
+version: 2.0.0
 title: empty results table
-file: ./test/unitest/internal/format_table_test.gleam
+file: ./test/unitest_test.gleam
 test_name: empty_results_test
 ---
 +--------+--------+------+----------+

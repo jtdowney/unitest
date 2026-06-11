@@ -5,26 +5,34 @@ import gleam/list
 import gleam/option.{type Option}
 import gleam/result
 import gleam/string
+import gleam/time/duration
 import gleam_community/ansi
 import simplifile
+import unitest/internal/utils
 
 pub type TestFailure {
-  TestFailure(
-    message: String,
-    file: String,
-    module: String,
-    function: String,
-    line: Int,
-    kind: PanicKind,
-  )
+  TestFailure(message: String, file: String, line: Int, kind: FailureKind)
 }
 
-pub type PanicKind {
+pub type FailureKind {
   Assert(start: Int, end: Int, kind: AssertKind)
   Panic
   Todo
   LetAssert(start: Int, end: Int, value: String)
+  Timeout(timeout_ms: Int)
+  Crashed(reason: String, stack: List(StackFrame))
+  Undef(module: String, function: String, arity: Int)
   Generic
+}
+
+pub type StackFrame {
+  StackFrame(
+    module: String,
+    function: String,
+    arity: Int,
+    file: String,
+    line: Int,
+  )
 }
 
 pub type AssertKind {
@@ -43,28 +51,48 @@ pub type ExprKind {
   Unevaluated
 }
 
-fn maybe_color(
-  text: String,
-  use_color: Bool,
-  color_fn: fn(String) -> String,
-) -> String {
-  case use_color {
-    True -> color_fn(text)
-    False -> text
+/// Drop frames inside unitest's own runner/FFI so crash traces show user code.
+pub fn drop_internal_frames(stack: List(StackFrame)) -> List(StackFrame) {
+  list.filter(stack, is_user_frame)
+}
+
+fn is_user_frame(frame: StackFrame) -> Bool {
+  !{
+    frame.module == "unitest"
+    || string.starts_with(frame.module, "unitest@")
+    || frame.module == "unitest_ffi"
+    || string.contains(frame.file, "/javascript/unitest/")
+    || string.starts_with(frame.file, "node:")
   }
 }
 
+pub fn extract_snippet(
+  file: String,
+  start: Int,
+  end: Int,
+) -> Result(String, Nil) {
+  use <- bool.guard(when: start <= 0 || end <= start, return: Error(Nil))
+  let length = end - start
+
+  use content <- result.try(
+    simplifile.read_bits(file) |> result.replace_error(Nil),
+  )
+  use snippet_bits <- result.try(bit_array.slice(content, start, length))
+  bit_array.to_string(snippet_bits)
+  |> result.replace_error(Nil)
+  |> result.map(string.trim)
+}
+
 pub fn format_failure(
-  index: Int,
-  test_module: String,
-  test_name: String,
-  duration_ms: Int,
-  error: TestFailure,
-  source: Option(String),
-  use_color: Bool,
+  index index: Int,
+  module module: String,
+  name name: String,
+  duration elapsed: duration.Duration,
+  error error: TestFailure,
+  source source: Option(String),
+  use_color use_color: Bool,
 ) -> String {
-  let header =
-    format_header(index, test_module, test_name, duration_ms, use_color)
+  let header = format_header(index, module, name, elapsed, use_color)
   let location = format_location(error.file, error.line, use_color)
 
   let #(snippet, values) = case error.kind, source {
@@ -76,27 +104,28 @@ pub fn format_failure(
     )
   }
 
-  let message = format_message(error.message, use_color)
+  let message = format_message(message_text(error), use_color)
 
-  string.join(
-    [header, location, snippet, values, message]
-      |> list.filter(fn(s) { s != "" }),
-    "\n",
-  )
+  utils.join_present([header, location, snippet, values, message], "\n")
 }
 
 fn format_header(
   index: Int,
   module: String,
   name: String,
-  duration_ms: Int,
+  elapsed: duration.Duration,
   use_color: Bool,
 ) -> String {
-  let num = int.to_string(index)
-  let test_name = module <> "." <> name
-  let dur = " (" <> format_duration(duration_ms) <> ")"
-  let text = num <> ") " <> test_name <> dur
-  maybe_color(text, use_color, ansi.red)
+  let text =
+    int.to_string(index)
+    <> ") "
+    <> module
+    <> "."
+    <> name
+    <> " ("
+    <> utils.format_duration(elapsed)
+    <> ")"
+  utils.maybe_color(text, use_color, ansi.red)
 }
 
 fn format_location(file: String, line: Int, use_color: Bool) -> String {
@@ -104,32 +133,69 @@ fn format_location(file: String, line: Int, use_color: Bool) -> String {
     "", _ | _, 0 -> ""
     f, l -> {
       let text = "   " <> f <> ":" <> int.to_string(l)
-      maybe_color(text, use_color, ansi.dim)
+      utils.maybe_color(text, use_color, ansi.dim)
     }
   }
+}
+
+fn color_snippet(code: String, use_color: Bool) -> String {
+  utils.maybe_color("\n     " <> code, use_color, ansi.cyan)
 }
 
 fn format_snippet(source: Option(String), use_color: Bool) -> String {
   case source {
     option.None -> ""
-    option.Some(code) -> {
-      let text = "\n     " <> code
-      maybe_color(text, use_color, ansi.cyan)
-    }
+    option.Some(code) -> color_snippet(code, use_color)
   }
 }
 
-fn format_values(kind: PanicKind, use_color: Bool) -> String {
+fn format_values(kind: FailureKind, use_color: Bool) -> String {
   case kind {
     Assert(kind: assert_kind, ..) ->
       format_assert_values(assert_kind, use_color)
     LetAssert(value: "", ..) -> ""
-    LetAssert(value: v, ..) -> {
-      let text = "\n   value: " <> v
-      maybe_color(text, use_color, ansi.yellow)
-    }
-    Panic | Todo | Generic -> ""
+    LetAssert(value: v, ..) ->
+      utils.maybe_color("\n   value: " <> v, use_color, ansi.yellow)
+    Panic | Todo | Generic | Timeout(..) | Crashed(..) | Undef(..) -> ""
   }
+}
+
+fn message_text(failure: TestFailure) -> String {
+  case failure.kind {
+    Timeout(timeout_ms:) ->
+      "Test timed out after " <> int.to_string(timeout_ms) <> "ms"
+    Crashed(reason:, stack:) ->
+      "Process crashed: " <> reason <> stack_suffix(stack)
+    Undef(module:, function:, arity:) ->
+      "Undefined function: "
+      <> module
+      <> ":"
+      <> function
+      <> "/"
+      <> int.to_string(arity)
+    Assert(..) | Panic | Todo | LetAssert(..) | Generic -> failure.message
+  }
+}
+
+fn stack_suffix(stack: List(StackFrame)) -> String {
+  stack
+  |> drop_internal_frames
+  |> list.map(frame_line)
+  |> string.concat
+}
+
+fn frame_line(frame: StackFrame) -> String {
+  let location = case frame.file {
+    "" -> ""
+    file -> " (" <> file <> ":" <> int.to_string(frame.line) <> ")"
+  }
+  "\n  in "
+  <> frame.module
+  <> ":"
+  <> frame.function
+  <> "/"
+  <> int.to_string(frame.arity)
+  <> location
 }
 
 fn format_assert_values(kind: AssertKind, use_color: Bool) -> String {
@@ -144,37 +210,28 @@ fn format_assert_values(kind: AssertKind, use_color: Bool) -> String {
           let left_text = "   left:  " <> left_value
           let right_text = "   right: " <> right_value
           let text = "\n" <> left_text <> "\n" <> right_text <> "\n" <> op_text
-          maybe_color(text, use_color, ansi.yellow)
+          utils.maybe_color(text, use_color, ansi.yellow)
         }
       }
     }
     FunctionCall(arguments:) -> {
       let args =
-        arguments
-        |> list.index_map(fn(arg, idx) {
-          let val = format_expr_value(arg.kind)
-          case val {
+        list.index_map(arguments, fn(arg, index) {
+          case format_expr_value(arg.kind) {
             "" -> ""
-            v -> "   arg " <> int.to_string(idx) <> ": " <> v
+            v -> "   arg " <> int.to_string(index) <> ": " <> v
           }
         })
-        |> list.filter(fn(s) { s != "" })
-      case args {
-        [] -> ""
-        _ -> {
-          let text = "\n" <> string.join(args, "\n")
-          maybe_color(text, use_color, ansi.yellow)
-        }
+      case utils.join_present(args, "\n") {
+        "" -> ""
+        text -> utils.maybe_color("\n" <> text, use_color, ansi.yellow)
       }
     }
     OtherExpression(expression:) -> {
       let val = format_expr_value(expression.kind)
       case val {
         "" -> ""
-        v -> {
-          let text = "\n   value: " <> v
-          maybe_color(text, use_color, ansi.yellow)
-        }
+        v -> utils.maybe_color("\n   value: " <> v, use_color, ansi.yellow)
       }
     }
   }
@@ -182,37 +239,16 @@ fn format_assert_values(kind: AssertKind, use_color: Bool) -> String {
 
 fn format_expr_value(kind: ExprKind) -> String {
   case kind {
-    Literal(value:) -> value
-    Expression(value:) -> value
+    Literal(value:) | Expression(value:) -> value
     Unevaluated -> ""
   }
 }
 
 fn format_message(message: String, use_color: Bool) -> String {
-  let text = "   " <> message
-  maybe_color(text, use_color, ansi.red)
-}
-
-fn format_duration(ms: Int) -> String {
-  case ms {
-    0 -> "< 1 ms"
-    1 -> "1 ms"
-    n if n < 1000 -> int.to_string(n) <> " ms"
-    n -> {
-      let secs = n / 1000
-      let remainder = n % 1000
-      case remainder {
-        0 -> int.to_string(secs) <> " s"
-        _ -> int.to_string(secs) <> "." <> pad_left(remainder, 3) <> " s"
-      }
-    }
+  case message {
+    "" -> ""
+    _ -> utils.maybe_color("   " <> message, use_color, ansi.red)
   }
-}
-
-fn pad_left(n: Int, width: Int) -> String {
-  let s = int.to_string(n)
-  let padding = int.max(0, width - string.length(s))
-  string.repeat("0", padding) <> s
 }
 
 fn format_assertion_with_labels(
@@ -220,26 +256,34 @@ fn format_assertion_with_labels(
   kind: AssertKind,
   use_color: Bool,
 ) -> #(String, String) {
-  let snippet = maybe_color("\n     " <> code, use_color, ansi.cyan)
+  let snippet = color_snippet(code, use_color)
 
   case kind {
     BinaryOperator(left:, right:, ..) -> {
       let left_val = format_expr_value(left.kind)
       let right_val = format_expr_value(right.kind)
 
-      let values_text =
-        "\n   left:  "
-        <> left_val
-        <> expr_kind_label(left.kind)
-        <> "\n   right: "
-        <> right_val
-        <> expr_kind_label(right.kind)
+      case left_val, right_val {
+        "", "" -> #(snippet, "")
+        _, _ -> {
+          let values_text =
+            "\n   left:  "
+            <> left_val
+            <> expr_kind_label(left.kind)
+            <> "\n   right: "
+            <> right_val
+            <> expr_kind_label(right.kind)
 
-      let values = maybe_color(values_text, use_color, ansi.yellow)
+          let values = utils.maybe_color(values_text, use_color, ansi.yellow)
 
-      #(snippet, values)
+          #(snippet, values)
+        }
+      }
     }
-    _ -> #(snippet, format_assert_values(kind, use_color))
+    FunctionCall(..) | OtherExpression(..) -> #(
+      snippet,
+      format_assert_values(kind, use_color),
+    )
   }
 }
 
@@ -249,21 +293,4 @@ fn expr_kind_label(kind: ExprKind) -> String {
     Expression(_) -> " (expression)"
     Unevaluated -> ""
   }
-}
-
-pub fn extract_snippet(
-  file: String,
-  start: Int,
-  end: Int,
-) -> Result(String, Nil) {
-  use <- bool.guard(start <= 0 || end <= start, Error(Nil))
-  let length = end - start
-
-  use content <- result.try(
-    simplifile.read_bits(file) |> result.replace_error(Nil),
-  )
-  use snippet_bits <- result.try(bit_array.slice(content, start, length))
-  bit_array.to_string(snippet_bits)
-  |> result.replace_error(Nil)
-  |> result.map(string.trim)
 }

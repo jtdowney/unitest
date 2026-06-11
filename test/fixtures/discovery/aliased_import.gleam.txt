@@ -1,0 +1,6 @@
+import unitest as u
+
+pub fn slow_test() {
+  use <- u.tag("slow")
+  Nil
+}

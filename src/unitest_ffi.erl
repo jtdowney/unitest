@@ -1,15 +1,15 @@
 -module(unitest_ffi).
 
 -export([
-    run_test_async/4,
+    run_test_async/5,
     now_ms/0,
     skip/0,
     default_workers/0,
-    start_module_pool/4,
+    start_module_pool/5,
     receive_pool_result/1
 ]).
 
--include_lib("unitest/include/unitest@internal@runner_PoolResult.hrl").
+-include_lib("unitest/include/unitest@internal@discovery_Test.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_TestFailure.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Assert.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_LetAssert.hrl").
@@ -19,33 +19,29 @@
 -include_lib("unitest/include/unitest@internal@test_failure_AssertedExpr.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Literal.hrl").
 -include_lib("unitest/include/unitest@internal@test_failure_Expression.hrl").
+-include_lib("unitest/include/unitest@internal@test_failure_Crashed.hrl").
+-include_lib("unitest/include/unitest@internal@test_failure_StackFrame.hrl").
+-include_lib("unitest/include/unitest@internal@test_failure_Timeout.hrl").
+-include_lib("unitest/include/unitest@internal@test_failure_Undef.hrl").
 
-get_file(Map) ->
-    maps:get(file, Map, <<"">>).
-
-get_module(Map) ->
-    maps:get(module, Map, <<"">>).
-
-get_function(Map) ->
-    maps:get(function, Map, <<"">>).
-
-get_line(Map) ->
-    maps:get(line, Map, 0).
-
-get_start(Map) ->
-    maps:get(start, Map, 0).
-
-get_end(Map) ->
-    maps:get('end', Map, 0).
+%% The remaining Gleam types these values mirror (TestResult, Outcome) are
+%% @internal, so Gleam emits no record .hrl for them. The FFI builds those
+%% tuples directly: the tag is the constructor in snake_case and the elements
+%% follow the Gleam field declaration order (see the type definitions in
+%% src/unitest.gleam). Nullary constructors are bare atoms (passed, skipped,
+%% generic, unevaluated...). #pool and #worker below are the FFI's own state,
+%% not Gleam types.
+-record(pool, {queue, limit, in_flight, workers, parent, check_results, timeout_ms}).
+-record(worker, {
+    remaining, max_concurrent, in_flight, pid_map, manager, check_results, timeout_ms
+}).
 
 %% Throw a skip exception to signal guard-based test skip
 skip() ->
     throw({gleam_unitest, skip}).
 
 %% Run a test function and return passed, skipped, or {failed, TestFailure}
-%% Test is a Gleam record: {test, Module, Name, Tags, FilePath, LineSpan}
-%% CheckResults: when true, treat Error results as test failures
-run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) ->
+run_test(#test{module = ModuleBin, name = NameBin}, CheckResults) ->
     ModuleConverted = binary:replace(ModuleBin, <<"/">>, <<"@">>, [global]),
     Module = erlang:binary_to_atom(ModuleConverted, utf8),
     Name = erlang:binary_to_atom(NameBin, utf8),
@@ -56,7 +52,7 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) 
         _ ->
             passed
     catch
-        throw:{gleam_unitest, skip} ->
+        {gleam_unitest, skip} ->
             skipped;
         error:Reason:Stack ->
             {failed, parse_gleam_error(Reason, Stack)};
@@ -66,11 +62,54 @@ run_test({test, ModuleBin, NameBin, _Tags, _FilePath, _LineSpan}, CheckResults) 
             {failed, parse_gleam_error(Reason, Stack)}
     end.
 
-run_test_async(Test, _PackageName, CheckResults, Continuation) ->
-    Result = run_test(Test, CheckResults),
+run_test_async(Test, _PackageName, CheckResults, TimeoutMs, Continuation) ->
+    Result = run_test_with_timeout(Test, CheckResults, TimeoutMs),
     Continuation(Result).
 
-%% Parse Gleam error maps into GleamPanic records
+run_test_with_timeout(Test, CheckResults, TimeoutMs) ->
+    Parent = self(),
+    %% A non-positive timeout means "disabled", matching the JavaScript FFI.
+    EffectiveTimeout =
+        case TimeoutMs of
+            N when N =< 0 ->
+                infinity;
+            N ->
+                N
+        end,
+    {Pid, Ref} =
+        spawn_monitor(fun() -> Parent ! {test_outcome, self(), run_test(Test, CheckResults)} end),
+    receive
+        {test_outcome, Pid, Outcome} ->
+            erlang:demonitor(Ref, [flush]),
+            Outcome;
+        {'DOWN', Ref, process, Pid, Reason} ->
+            {failed, crashed_failure(Reason, [])}
+    after EffectiveTimeout ->
+        exit(Pid, kill),
+        %% Await the DOWN so any test_outcome the test sent before dying is
+        %% already queued (signal ordering), then drop it from the mailbox.
+        receive
+            {'DOWN', Ref, process, Pid, _} -> ok
+        end,
+        flush_test_outcome(Pid),
+        {failed, #test_failure{
+            message = <<"">>,
+            file = <<"">>,
+            line = 0,
+            kind = #timeout{timeout_ms = TimeoutMs}
+        }}
+    end.
+
+flush_test_outcome(Pid) ->
+    receive
+        {test_outcome, Pid, _} -> ok
+    after 0 -> ok
+    end.
+
+inspect_term(Term) ->
+    iolist_to_binary(io_lib:format("~p", [Term])).
+
+%% Parse a Gleam panic/crash into a TestFailure tuple.
 parse_gleam_error(Reason, _Stack) when is_map(Reason) ->
     case maps:get(gleam_error, Reason, undefined) of
         assert ->
@@ -82,100 +121,99 @@ parse_gleam_error(Reason, _Stack) when is_map(Reason) ->
         let_assert ->
             build_let_assert_panic(Reason);
         _ ->
-            build_generic_panic(Reason, [])
+            crashed_failure(Reason, [])
     end;
 parse_gleam_error(undef, Stack) ->
     build_undef_panic(Stack);
 parse_gleam_error(Reason, Stack) ->
-    build_generic_panic(Reason, Stack).
+    crashed_failure(Reason, build_stack(Stack)).
 
 base_failure(Map, DefaultMessage, Kind) ->
     #test_failure{
         message = maps:get(message, Map, DefaultMessage),
-        file = get_file(Map),
-        module = get_module(Map),
-        function = get_function(Map),
-        line = get_line(Map),
+        file = maps:get(file, Map, <<"">>),
+        line = maps:get(line, Map, 0),
         kind = Kind
     }.
 
 generic_failure(Message) ->
+    base_failure(#{}, Message, generic).
+
+crashed_failure(Reason, Stack) ->
     #test_failure{
-        message = Message,
-        file = <<>>,
-        module = <<>>,
-        function = <<>>,
+        message = <<"">>,
+        file = <<"">>,
         line = 0,
-        kind = generic
+        kind = #crashed{reason = inspect_term(Reason), stack = Stack}
     }.
 
 build_assert_panic(Map) ->
-    Kind = #assert{
-        start = get_start(Map),
-        'end' = get_end(Map),
-        kind = build_assert_kind(Map)
-    },
+    Kind =
+        #assert{
+            start = maps:get(start, Map, 0),
+            'end' = maps:get('end', Map, 0),
+            kind = build_assert_kind(Map)
+        },
     base_failure(Map, <<"Assertion failed">>, Kind).
 
 build_let_assert_panic(Map) ->
     Value = maps:get(value, Map, undefined),
-    Kind = #let_assert{
-        start = get_start(Map),
-        'end' = get_end(Map),
-        value = gleam@string:inspect(Value)
-    },
+    Kind =
+        #let_assert{
+            start = maps:get(start, Map, 0),
+            'end' = maps:get('end', Map, 0),
+            value = gleam@string:inspect(Value)
+        },
     base_failure(Map, <<"Let assert failed">>, Kind).
 
 build_simple_panic(Map, Kind) ->
     base_failure(Map, <<"Panic">>, Kind).
 
-%% Build panic for undefined function errors
+%% Build a TestFailure for undefined function errors.
 build_undef_panic([{M, F, A, _Info} | _Rest]) ->
-    Arity =
-        case A of
-            Args when is_list(Args) ->
-                length(Args);
-            N when is_integer(N) ->
-                N
-        end,
-    Message = iolist_to_binary(io_lib:format("Undefined function: ~s:~s/~B", [M, F, Arity])),
-    generic_failure(Message);
+    #test_failure{
+        message = <<"">>,
+        file = <<"">>,
+        line = 0,
+        kind =
+            #undef{
+                module = atom_to_binary(M, utf8),
+                function = atom_to_binary(F, utf8),
+                arity = frame_arity(A)
+            }
+    };
 build_undef_panic(_) ->
     generic_failure(<<"Undefined function">>).
 
-%% Build panic for generic/unknown errors
-build_generic_panic(Reason, Stack) ->
-    StackInfo = format_stack_summary(Stack),
-    BaseMessage = iolist_to_binary(io_lib:format("~p", [Reason])),
-    Message =
-        case StackInfo of
-            <<>> ->
-                BaseMessage;
-            _ ->
-                <<BaseMessage/binary, "\n", StackInfo/binary>>
-        end,
-    generic_failure(Message).
+%% Convert an Erlang stacktrace into stack frames.
+build_stack(Stack) when is_list(Stack) ->
+    [build_frame(Entry) || Entry <- Stack];
+build_stack(_) ->
+    [].
 
-%% Format a brief stack summary (first meaningful frame)
-format_stack_summary([{M, F, A, Info} | _]) ->
-    Arity =
-        case A of
-            Args when is_list(Args) ->
-                length(Args);
-            N when is_integer(N) ->
-                N
-        end,
+build_frame({M, F, A, Info}) ->
+    #stack_frame{
+        module = atom_to_binary(M, utf8),
+        function = atom_to_binary(F, utf8),
+        arity = frame_arity(A),
+        file = frame_file(Info),
+        line = proplists:get_value(line, Info, 0)
+    }.
+
+frame_arity(Args) when is_list(Args) ->
+    length(Args);
+frame_arity(N) when is_integer(N) ->
+    N.
+
+frame_file(Info) ->
     case proplists:get_value(file, Info) of
         undefined ->
-            iolist_to_binary(io_lib:format("  in ~s:~s/~B", [M, F, Arity]));
+            <<>>;
         File ->
-            Line = proplists:get_value(line, Info, 0),
-            iolist_to_binary(io_lib:format("  in ~s:~s/~B (~s:~B)", [M, F, Arity, File, Line]))
-    end;
-format_stack_summary(_) ->
-    <<>>.
+            iolist_to_binary(File)
+    end.
 
-%% Build AssertKind based on the 'kind' field in the error map
+%% Build the AssertKind value from the 'kind' field in the error map.
 build_assert_kind(Map) ->
     case maps:get(kind, Map, undefined) of
         binary_operator ->
@@ -185,189 +223,265 @@ build_assert_kind(Map) ->
                 right = build_asserted_expr(maps:get(right, Map, #{}))
             };
         function_call ->
-            Args = maps:get(arguments, Map, []),
-            #function_call{arguments = [build_asserted_expr(A) || A <- Args]};
+            #function_call{
+                arguments = [build_asserted_expr(A) || A <- maps:get(arguments, Map, [])]
+            };
         other_expression ->
             #other_expression{expression = build_asserted_expr(maps:get(expression, Map, #{}))};
         _ ->
-            %% Fallback: treat as other_expression with unevaluated
-            #other_expression{
-                expression =
-                    #asserted_expr{
-                        start = 0,
-                        'end' = 0,
-                        kind = unevaluated
-                    }
-            }
+            #other_expression{expression = #asserted_expr{start = 0, 'end' = 0, kind = unevaluated}}
     end.
 
 build_asserted_expr(Map) when is_map(Map) ->
     #asserted_expr{
-        start = get_start(Map),
-        'end' = get_end(Map),
+        start = maps:get(start, Map, 0),
+        'end' = maps:get('end', Map, 0),
         kind = build_expr_kind(Map)
     };
 build_asserted_expr(_) ->
-    #asserted_expr{
-        start = 0,
-        'end' = 0,
-        kind = unevaluated
-    }.
+    #asserted_expr{start = 0, 'end' = 0, kind = unevaluated}.
 
-%% Build ExprKind from a map
 build_expr_kind(Map) ->
-    case maps:get(kind, Map, undefined) of
-        literal ->
-            Value = maps:get(value, Map, undefined),
+    case {maps:get(kind, Map, undefined), maps:find(value, Map)} of
+        {literal, {ok, Value}} ->
             #literal{value = gleam@string:inspect(Value)};
-        expression ->
-            Value = maps:get(value, Map, undefined),
+        {expression, {ok, Value}} ->
             #expression{value = gleam@string:inspect(Value)};
         _ ->
             unevaluated
     end.
 
 default_workers() ->
-    Schedulers = erlang:system_info(schedulers_online),
-    case Schedulers > 0 of
-        true -> Schedulers;
-        false -> 1
-    end.
+    erlang:system_info(schedulers_online).
 
-start_module_pool(ModuleGroups, _PackageName, CheckResults, Workers) ->
-    Parent = self(),
-    Limit = max(1, Workers),
-    Queue = queue:from_list(ModuleGroups),
-    spawn_link(fun() -> pool_manager(Queue, Limit, 0, #{}, Parent, CheckResults) end),
+start_module_pool(ModuleGroups, _PackageName, CheckResults, TimeoutMs, Workers) ->
+    Pool =
+        #pool{
+            queue = queue:from_list(ModuleGroups),
+            limit = max(1, Workers),
+            in_flight = 0,
+            workers = #{},
+            parent = self(),
+            check_results = CheckResults,
+            timeout_ms = TimeoutMs
+        },
+    spawn_link(fun() -> pool_manager(Pool) end),
     nil.
 
-pool_manager(Queue, Limit, InFlight, Workers, Parent, CheckResults) ->
-    case {queue:is_empty(Queue), InFlight} of
-        {true, 0} ->
+pool_manager(
+    #pool{
+        queue = Queue,
+        in_flight = InFlight,
+        limit = Limit
+    } =
+        Pool
+) ->
+    case queue:is_empty(Queue) andalso InFlight =:= 0 of
+        true ->
             ok;
-        _ ->
+        false ->
             case InFlight < Limit andalso not queue:is_empty(Queue) of
                 true ->
-                    {{value, ModuleGroup}, Rest} = queue:out(Queue),
-                    Self = self(),
-                    Pid = spawn_module_worker(ModuleGroup, CheckResults, Self),
-                    NewWorkers = maps:put(Pid, ModuleGroup, Workers),
-                    pool_manager(Rest, Limit, InFlight + 1, NewWorkers, Parent, CheckResults);
+                    dispatch_worker(Pool);
                 false ->
-                    receive
-                        {pool_result, Pid, PoolResult} ->
-                            Parent ! {unitest_pool_result, PoolResult},
-                            NewWorkers = remove_pending_test(
-                                Pid, PoolResult#pool_result.item, Workers
-                            ),
-                            pool_manager(Queue, Limit, InFlight, NewWorkers, Parent, CheckResults);
-                        {module_done, Pid} ->
-                            NewWorkers = maps:remove(Pid, Workers),
-                            pool_manager(
-                                Queue, Limit, InFlight - 1, NewWorkers, Parent, CheckResults
-                            );
-                        {'DOWN', _Ref, process, Pid, Reason} ->
-                            case maps:find(Pid, Workers) of
-                                {ok, Pending} ->
-                                    lists:foreach(
-                                        fun(Test) ->
-                                            Parent !
-                                                {unitest_pool_result,
-                                                    build_crash_pool_result(Test, Reason)}
-                                        end,
-                                        Pending
-                                    ),
-                                    NewWorkers = maps:remove(Pid, Workers),
-                                    pool_manager(
-                                        Queue, Limit, InFlight - 1, NewWorkers, Parent, CheckResults
-                                    );
-                                error ->
-                                    pool_manager(
-                                        Queue, Limit, InFlight, Workers, Parent, CheckResults
-                                    )
-                            end
-                    end
+                    await_worker(Pool)
             end
+    end.
+
+dispatch_worker(
+    #pool{
+        queue = Queue,
+        in_flight = InFlight,
+        workers = Workers
+    } =
+        Pool
+) ->
+    {{value, ModuleGroup}, Rest} = queue:out(Queue),
+    Pid = spawn_module_worker(
+        ModuleGroup,
+        Pool#pool.check_results,
+        Pool#pool.timeout_ms,
+        self()
+    ),
+    pool_manager(Pool#pool{
+        queue = Rest,
+        in_flight = InFlight + 1,
+        workers = maps:put(Pid, ModuleGroup, Workers)
+    }).
+
+await_worker(
+    #pool{
+        workers = Workers,
+        parent = Parent,
+        in_flight = InFlight
+    } =
+        Pool
+) ->
+    receive
+        {pool_result, Pid, PoolResult} ->
+            Parent ! {unitest_pool_result, PoolResult},
+            pool_manager(Pool#pool{
+                workers =
+                    remove_pending_test(
+                        Pid,
+                        element(2, PoolResult),
+                        Workers
+                    )
+            });
+        {module_done, Pid} ->
+            pool_manager(Pool#pool{in_flight = InFlight - 1, workers = maps:remove(Pid, Workers)});
+        {'DOWN', _Ref, process, Pid, Reason} ->
+            handle_worker_down(Pid, Reason, Pool)
+    end.
+
+handle_worker_down(
+    Pid,
+    Reason,
+    #pool{
+        workers = Workers,
+        parent = Parent,
+        in_flight = InFlight
+    } =
+        Pool
+) ->
+    case maps:find(Pid, Workers) of
+        {ok, Pending} ->
+            lists:foreach(
+                fun(Test) ->
+                    Parent ! {unitest_pool_result, build_crash_pool_result(Test, Reason)}
+                end,
+                Pending
+            ),
+            pool_manager(Pool#pool{in_flight = InFlight - 1, workers = maps:remove(Pid, Workers)});
+        error ->
+            pool_manager(Pool)
     end.
 
 remove_pending_test(Pid, Test, Workers) ->
     case maps:find(Pid, Workers) of
-        {ok, Pending} -> maps:put(Pid, lists:delete(Test, Pending), Workers);
-        error -> Workers
+        {ok, Pending} ->
+            maps:put(Pid, lists:delete(Test, Pending), Workers);
+        error ->
+            Workers
     end.
 
-spawn_module_worker(Tests, CheckResults, Manager) ->
-    MaxConcurrent = max(1, erlang:system_info(schedulers_online)),
-    {Pid, _Ref} = spawn_monitor(fun() ->
-        process_flag(trap_exit, true),
-        module_worker_loop(Tests, MaxConcurrent, 0, #{}, Manager, CheckResults)
-    end),
+spawn_module_worker(Tests, CheckResults, TimeoutMs, Manager) ->
+    Worker =
+        #worker{
+            remaining = Tests,
+            max_concurrent = max(1, erlang:system_info(schedulers_online)),
+            in_flight = 0,
+            pid_map = #{},
+            manager = Manager,
+            check_results = CheckResults,
+            timeout_ms = TimeoutMs
+        },
+    {Pid, _Ref} =
+        spawn_monitor(fun() ->
+            process_flag(trap_exit, true),
+            module_worker_loop(Worker)
+        end),
     Pid.
 
-module_worker_loop(Remaining, _MaxConcurrent, 0, _PidMap, Manager, _CheckResults) when
-    Remaining =:= []
-->
+module_worker_loop(#worker{
+    remaining = [],
+    in_flight = 0,
+    manager = Manager
+}) ->
     Manager ! {module_done, self()},
     ok;
-module_worker_loop(Remaining, MaxConcurrent, InFlight, PidMap, Manager, CheckResults) ->
+module_worker_loop(
+    #worker{
+        remaining = Remaining,
+        max_concurrent = MaxConcurrent,
+        in_flight = InFlight
+    } =
+        Worker
+) ->
     case InFlight < MaxConcurrent andalso Remaining =/= [] of
         true ->
-            [Test | Rest] = Remaining,
-            Self = self(),
-            ChildPid = spawn_link(fun() ->
-                Start = now_ms(),
-                Result = run_test(Test, CheckResults),
-                Duration = now_ms() - Start,
-                Self !
-                    {test_done, self(), #pool_result{
-                        item = Test, result = Result, duration_ms = Duration
-                    }}
-            end),
-            NewPidMap = maps:put(ChildPid, Test, PidMap),
-            module_worker_loop(Rest, MaxConcurrent, InFlight + 1, NewPidMap, Manager, CheckResults);
+            dispatch_test(Worker);
         false ->
-            receive
-                {test_done, ChildPid, PoolResult} ->
-                    Manager ! {pool_result, self(), PoolResult},
-                    NewPidMap = maps:remove(ChildPid, PidMap),
-                    module_worker_loop(
-                        Remaining, MaxConcurrent, InFlight - 1, NewPidMap, Manager, CheckResults
-                    );
-                {'EXIT', ChildPid, Reason} ->
-                    case maps:find(ChildPid, PidMap) of
-                        {ok, Test} ->
-                            CrashResult = build_crash_pool_result(Test, Reason),
-                            Manager ! {pool_result, self(), CrashResult},
-                            NewPidMap = maps:remove(ChildPid, PidMap),
-                            module_worker_loop(
-                                Remaining,
-                                MaxConcurrent,
-                                InFlight - 1,
-                                NewPidMap,
-                                Manager,
-                                CheckResults
-                            );
-                        error ->
-                            module_worker_loop(
-                                Remaining, MaxConcurrent, InFlight, PidMap, Manager, CheckResults
-                            )
-                    end
-            end
+            await_test(Worker)
+    end.
+
+dispatch_test(
+    #worker{
+        remaining = [Test | Rest],
+        in_flight = InFlight,
+        pid_map = PidMap
+    } =
+        Worker
+) ->
+    Self = self(),
+    ChildPid =
+        spawn_link(fun() ->
+            Start = now_ms(),
+            Result =
+                run_test_with_timeout(
+                    Test,
+                    Worker#worker.check_results,
+                    Worker#worker.timeout_ms
+                ),
+            Duration = now_ms() - Start,
+            Self !
+                {test_done, self(),
+                    {test_result, Test, Result, gleam@time@duration:milliseconds(Duration)}}
+        end),
+    module_worker_loop(Worker#worker{
+        remaining = Rest,
+        in_flight = InFlight + 1,
+        pid_map = maps:put(ChildPid, Test, PidMap)
+    }).
+
+await_test(
+    #worker{
+        in_flight = InFlight,
+        pid_map = PidMap,
+        manager = Manager
+    } =
+        Worker
+) ->
+    receive
+        {test_done, ChildPid, PoolResult} ->
+            Manager ! {pool_result, self(), PoolResult},
+            module_worker_loop(Worker#worker{
+                in_flight = InFlight - 1,
+                pid_map = maps:remove(ChildPid, PidMap)
+            });
+        {'EXIT', ChildPid, Reason} ->
+            handle_test_exit(ChildPid, Reason, Worker)
+    end.
+
+handle_test_exit(
+    ChildPid,
+    Reason,
+    #worker{
+        in_flight = InFlight,
+        pid_map = PidMap,
+        manager = Manager
+    } =
+        Worker
+) ->
+    case maps:find(ChildPid, PidMap) of
+        {ok, Test} ->
+            Manager ! {pool_result, self(), build_crash_pool_result(Test, Reason)},
+            module_worker_loop(Worker#worker{
+                in_flight = InFlight - 1,
+                pid_map = maps:remove(ChildPid, PidMap)
+            });
+        error ->
+            module_worker_loop(Worker)
     end.
 
 build_crash_pool_result(Test, Reason) ->
-    Message = iolist_to_binary(io_lib:format("Process crashed: ~p", [Reason])),
-    #pool_result{
-        item = Test,
-        result = {failed, generic_failure(Message)},
-        duration_ms = 0
-    }.
+    {test_result, Test, {failed, crashed_failure(Reason, [])}, gleam@time@duration:milliseconds(0)}.
 
 receive_pool_result(Callback) ->
     receive
-        {unitest_pool_result, PoolResult} -> Callback(PoolResult)
+        {unitest_pool_result, PoolResult} ->
+            Callback(PoolResult)
     end.
 
-%% Get current time in milliseconds
 now_ms() ->
-    erlang:system_time(millisecond).
+    erlang:monotonic_time(millisecond).

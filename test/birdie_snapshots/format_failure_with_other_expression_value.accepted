@@ -1,0 +1,9 @@
+---
+version: 2.0.0
+title: format_failure with other expression value
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_other_expression_test
+---
+1) m.t (< 1ms)
+
+   value: False

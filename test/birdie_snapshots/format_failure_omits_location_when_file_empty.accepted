@@ -1,0 +1,8 @@
+---
+version: 2.0.0
+title: format_failure omits location when file empty
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_omits_location_when_file_empty_test
+---
+1) m.t (< 1ms)
+   err

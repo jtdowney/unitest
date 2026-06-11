@@ -11,8 +11,8 @@ gleam test
 # Run with a specific seed for reproducible ordering
 gleam test -- --seed 12345
 
-# Run only tests in a specific module
-gleam test -- --module demo_test
+# Run only tests in a specific file
+gleam test -- demo_test.gleam
 
 # Run a single test
 gleam test -- --test tagged_test.fibonacci_small_test
@@ -46,11 +46,33 @@ pub fn integration_slow_test() {
 }
 ```
 
+### `test/guard_test.gleam`
+
+Demonstrates runtime guards for conditionally skipping tests:
+
+```gleam
+// Skip unless a condition holds at runtime
+pub fn database_integration_test() {
+  use <- require_env("DATABASE_URL")
+  // ... test code
+}
+
+fn require_env(name: String, next: fn() -> a) -> a {
+  unitest.guard(envoy.get(name) |> result.is_ok, next)
+}
+```
+
+Guarded tests that don't run are reported as skipped (`S`).
+
+### `test/wibble/wobble_test.gleam`
+
+Shows that test discovery recurses into nested directories under `test/`.
+
 ## Features Demonstrated
 
-1. **Test Discovery** - Public functions ending in `_test` are automatically found
-2. **Random Ordering** - Tests run in random order by default
-3. **Reproducible Seeds** - Use `--seed` for deterministic ordering
-4. **Test Tagging** - Mark tests with `unitest.tag()` or `unitest.tags()`
-5. **CLI Filtering** - Filter by `--module`, `--test`, or `--tag`
-6. **Dot Output** - Streaming `.` for pass, `F` for fail, `S` for skip
+- Public functions ending in `_test` are automatically discovered
+- Tests run in random order by default; pass `--seed` for reproducible ordering
+- Tests can be tagged with `unitest.tag()` or `unitest.tags()`
+- Tests can be skipped at runtime with `unitest.guard()`
+- Runs can be filtered by file path, `--test`, or `--tag`
+- Output streams `.` for pass, `F` for fail, `S` for skip

@@ -1,6 +1,12 @@
-// FFI file to demonstrate undefined function errors
+// FFI helpers to demonstrate failures.
+
+// Call a function that doesn't exist to trigger a real TypeError
 export function nonexistentFunction() {
-  // Call a function that doesn't exist to trigger a real TypeError
   const obj = {};
   obj.thisMethodDoesNotExist();
+}
+
+// Throw a runtime error to demonstrate a crashed test
+export function crash() {
+  throw new Error("simulated crash");
 }

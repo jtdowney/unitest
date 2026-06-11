@@ -1,8 +1,8 @@
 ---
-version: 1.5.3
+version: 2.0.0
 title: all failing tests table
-file: ./test/unitest/internal/format_table_test.gleam
-test_name: all_failing_tests_with_color_test
+file: ./test/unitest_test.gleam
+test_name: all_failing_tests_table_test
 ---
 +--------+--------+--------+----------+
 | Status | Module | Test   | Duration |

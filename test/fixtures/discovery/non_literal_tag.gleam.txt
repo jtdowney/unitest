@@ -1,0 +1,6 @@
+import unitest
+
+pub fn a_test() {
+  use <- unitest.tag(my_tag)
+  Nil
+}
