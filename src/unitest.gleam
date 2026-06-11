@@ -1458,11 +1458,7 @@ fn start_module_pool(
   workers: Int,
 ) -> Nil
 
-@target(erlang)
+@external(javascript, "./unitest_ffi.mjs", "yieldThen")
 fn yield_then(next: fn() -> Nil) -> Nil {
   next()
 }
-
-@target(javascript)
-@external(javascript, "./unitest_ffi.mjs", "yieldThen")
-fn yield_then(next: fn() -> Nil) -> Nil

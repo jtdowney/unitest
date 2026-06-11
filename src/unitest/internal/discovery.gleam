@@ -11,11 +11,10 @@ const gleam_extension = ".gleam"
 
 const test_directory = "test"
 
-@target(erlang)
-const current_target = "erlang"
-
-@target(javascript)
-const current_target = "javascript"
+@external(javascript, "../../unitest_ffi.mjs", "currentTarget")
+fn current_target() -> String {
+  "erlang"
+}
 
 pub type LineSpan {
   LineSpan(start_line: Int, end_line: Int)
@@ -137,7 +136,7 @@ fn tests_from_contents(
 }
 
 pub fn parse_module(source: String) -> Result(List(ParsedTest), glance.Error) {
-  parse_module_for_target(source, current_target)
+  parse_module_for_target(source, current_target())
 }
 
 pub fn parse_module_for_target(

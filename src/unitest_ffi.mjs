@@ -101,6 +101,10 @@ export function nowMs() {
   return Math.round(performance.now());
 }
 
+export function currentTarget() {
+  return "javascript";
+}
+
 export function halt(code) {
   if (runtime === "node") {
     process.exitCode = code;
