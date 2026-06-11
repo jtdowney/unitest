@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Parallel test execution**: Tests now run concurrently using module-group pooling for faster test suites
-- **Module-group shuffling**: Tests are shuffled by module group instead of individually, preserving intra-module ordering while randomizing across modules
+- Tests now run concurrently using module-group pooling for faster test suites
+- Tests are shuffled by module group instead of individually, preserving intra-module ordering while randomizing across modules
 
 ### Fixed
 
@@ -37,20 +37,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Guard evaluation**: Use lazy evaluation in `unitest.guard` to prevent skip conditions from being evaluated eagerly
+- Use lazy evaluation in `unitest.guard` to prevent skip conditions from being evaluated eagerly
 
 ## [1.4.1] - 2026-01-27
 
 ### Fixed
 
-- **Error result checking now opt-in**: The `check_results` option must be explicitly enabled to treat `Error` return values as test failures, preventing unexpected failures for codebases that intentionally return `Error` from tests
+- Error result checking is now opt-in: the `check_results` option must be explicitly enabled to treat `Error` return values as test failures, preventing unexpected failures for codebases that intentionally return `Error` from tests
 
 ## [1.4.0] - 2026-01-26
 
 ### Added
 
-- **Runtime test skipping**: Use `unitest.guard(condition)` to skip tests at runtime based on environment or configuration
-- **Error result handling**: Tests returning `Error` values are now treated as failures, making it easier to write tests that use result types
+- Use `unitest.guard(condition)` to skip tests at runtime based on environment or configuration
+- Tests returning `Error` values are now treated as failures, making it easier to write tests that use result types
 
 ## [1.3.1] - 2026-01-18
 
@@ -62,22 +62,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Table sorting**: Configure table reporter output with `--sort time` (by duration) or `--sort name` (alphabetically), plus `--sort-rev` to reverse order
-- **Target filtering**: Filter tests by `@target` attribute to run platform-specific tests
+- Configure table reporter output with `--sort time` (by duration) or `--sort name` (alphabetically), plus `--sort-rev` to reverse order
+- Filter tests by `@target` attribute to run platform-specific tests
 
 ## [1.2.0] - 2026-01-17
 
 ### Added
 
-- **Table reporter**: New `--reporter table` option for formatted test result output
+- New `--reporter table` option for formatted test result output
 
 ## [1.1.0] - 2026-01-12
 
 ### Added
 
-- **File path filtering**: Run tests in a specific file with `gleam test -- test/my_mod_test.gleam`
-- **Line number filtering**: Run the test at a specific line with `gleam test -- test/my_mod_test.gleam:42`
-- **Improved error messages**: Better context when undefined functions are referenced
+- Run all tests in a specific file with `gleam test -- test/my_mod_test.gleam`
+- Run the test at a specific line with `gleam test -- test/my_mod_test.gleam:42`
+- Better error messages when undefined functions are referenced
 
 ### Fixed
 
@@ -89,18 +89,18 @@ Initial release of unitest, a Gleam test runner with random ordering, tagging, a
 
 ### Added
 
-- **Drop-in gleeunit replacement**: Replace `gleeunit.main()` with `unitest.main()` for instant compatibility if you are using asserts
-- **Random test ordering**: Tests run in random order by default to catch hidden dependencies
-- **Reproducible seeds**: Use `--seed <int>` to reproduce exact test order for debugging flaky tests
-- **Test tagging**: Mark tests with `unitest.tag("name")` or `unitest.tags(["a", "b"])` using `use` syntax
-- **CLI filtering**:
+- Drop-in gleeunit replacement: swap `gleeunit.main()` for `unitest.main()` for instant compatibility if you are using asserts
+- Tests run in random order by default to catch hidden dependencies
+- Use `--seed <int>` to reproduce exact test order for debugging flaky tests
+- Mark tests with `unitest.tag("name")` or `unitest.tags(["a", "b"])` using `use` syntax
+- CLI filtering:
   - `--module <name>`: Run only tests in a specific module
   - `--test <module.fn>`: Run a single test function
   - `--tag <name>`: Run only tests with a specific tag
-- **Ignored tags**: Configure `ignored_tags` in `Options` to skip tests by default (shown as `S`)
-- **Streaming output**: Real-time feedback with `.` (pass), `F` (fail), `S` (skip)
-- **Color output**: Colored output by default, respects `NO_COLOR` environment variable and `--no-color` flag
-- **Cross-platform support**: Works on Erlang and JavaScript targets
+- Configure `ignored_tags` in `Options` to skip tests by default (shown as `S`)
+- Streaming output with real-time feedback: `.` (pass), `F` (fail), `S` (skip)
+- Colored output by default, respecting the `NO_COLOR` environment variable and `--no-color` flag
+- Works on Erlang and JavaScript targets
 
 [1.6.0]: https://github.com/jtdowney/unitest/releases/tag/v1.6.0
 [1.5.0]: https://github.com/jtdowney/unitest/releases/tag/v1.5.0
