@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - Unreleased
+
+### Added
+
+- Per-test timeouts: tests that exceed the timeout fail with
+  `Test timed out after <n>ms` instead of hanging the run. Configure with
+  `--timeout <ms>` (0 disables) or `unitest.timeout(duration)`; the default is
+  60 seconds. On JavaScript, a synchronously hanging test can only be
+  interrupted in parallel (worker thread) mode
+- `unitest.table_reporter()` makes the table reporter the default; the
+  `--reporter` CLI flag still overrides it
+- Process crashes report the crash reason and a stack trace filtered to user
+  code; calls to undefined functions are reported as `module:function/arity`
+- File filters accept absolute paths and Windows-style separators
+  (`C:\proj\test\my_mod_test.gleam:42`)
+
+### Changed
+
+- Breaking: `Options` is now opaque. Replace
+  `Options(..unitest.default_options(), ...)` record updates with
+  `unitest.defaults()` piped through builder functions: `seed`,
+  `ignored_tags`, `check_results`, `execution_mode`, `sort_order`,
+  `sort_reversed`, `table_reporter`, and `timeout`
+- Breaking: `gleam_stdlib >= 0.50.0` is now required
+- `SortOrder` (`NativeSort`, `TimeSort`, `NameSort`) is now part of the public
+  `unitest` API for use with `unitest.sort_order`
+- On JavaScript, parallel workers now pull individual tests from a shared
+  queue instead of running whole module groups
+
+### Removed
+
+- Breaking: `default_options()` and the `test_directory` option; test
+  discovery always scans `test/`
+
+### Fixed
+
+- Use singular "failure" in the summary line when exactly one test fails
+
 ## [1.6.0] - 2026-05-30
 
 ### Added

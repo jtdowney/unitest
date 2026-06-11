@@ -1,0 +1,22 @@
+---
+version: 2.0.0
+title: format_duration across edge cases
+file: ./test/unitest/internal/utils_test.gleam
+test_name: format_duration_edge_cases_test
+---
+0 ms -> < 1ms
+1 ms -> 1ms
+500 ms -> 500ms
+999 ms -> 999ms
+1000 ms -> 1s
+1050 ms -> 1s
+1500 ms -> 1.5s
+45000 ms -> 45s
+59999 ms -> 59.9s
+60000 ms -> 1m 0s
+90000 ms -> 1m 30s
+300000 ms -> 5m 0s
+3599000 ms -> 59m 59s
+3600000 ms -> 1h 0m
+3723000 ms -> 1h 2m
+90000000 ms -> 25h 0m

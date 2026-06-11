@@ -1,0 +1,11 @@
+import unitest.{tag, tags as test_tags}
+
+pub fn a_test() {
+  use <- tag("db")
+  Nil
+}
+
+pub fn b_test() {
+  use <- test_tags(["slow", "net"])
+  Nil
+}

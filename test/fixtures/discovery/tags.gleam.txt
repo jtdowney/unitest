@@ -1,0 +1,21 @@
+import unitest
+
+pub fn single_tag_test() {
+  use <- unitest.tag("slow")
+  assert True
+}
+
+pub fn multiple_tags_test() {
+  use <- unitest.tag("slow")
+  use <- unitest.tag("db")
+  assert True
+}
+
+pub fn tags_list_test() {
+  use <- unitest.tags(["slow", "integration"])
+  assert True
+}
+
+pub fn untagged_test() {
+  assert True
+}

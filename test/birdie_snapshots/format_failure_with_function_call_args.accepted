@@ -1,0 +1,11 @@
+---
+version: 2.0.0
+title: format_failure with function call args
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_function_call_test
+---
+1) mod.test (< 1ms)
+
+   arg 0: "hello"
+   arg 1: 5
+   Assertion failed

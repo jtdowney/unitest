@@ -1,0 +1,10 @@
+---
+version: 2.0.0
+title: format_failure with crashed stack frames
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_crashed_stack_frames_test
+---
+1) m.t (< 1ms)
+   Process crashed: badmatch
+  in my_mod:run/1 (src/my_mod.gleam:12)
+  in my_mod:call/0 (src/my_mod.gleam:5)

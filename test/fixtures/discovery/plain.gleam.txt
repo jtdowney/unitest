@@ -1,0 +1,7 @@
+pub fn first_test() {
+  Nil
+}
+
+pub fn second_test() {
+  Nil
+}

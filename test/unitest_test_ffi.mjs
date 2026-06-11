@@ -1,7 +1,7 @@
 import {
   execute_sequential as executeSequential,
   execute_pooled as executePooled,
-} from "./unitest/internal/runner.mjs";
+} from "./unitest.mjs";
 
 export function executeSyncSequentialJs(
   plan,

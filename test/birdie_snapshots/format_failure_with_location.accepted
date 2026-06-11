@@ -1,0 +1,9 @@
+---
+version: 2.0.0
+title: format_failure with location
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_includes_location_test
+---
+1) mod.test (< 1ms)
+   test/foo_test.gleam:25
+   failed

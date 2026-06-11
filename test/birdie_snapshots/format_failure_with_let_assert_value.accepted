@@ -1,0 +1,10 @@
+---
+version: 2.0.0
+title: format_failure with let assert value
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_let_assert_test
+---
+1) mod.test (< 1ms)
+
+   value: Error(Nil)
+   Pattern match failed

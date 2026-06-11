@@ -6,7 +6,7 @@
 
 execute_sync_sequential(Plan, Seed, Platform, OnResult, Callback) ->
     Self = self(),
-    unitest@internal@runner:execute_sequential(
+    unitest:execute_sequential(
         Plan,
         Seed,
         Platform,
@@ -20,7 +20,7 @@ execute_sync_sequential(Plan, Seed, Platform, OnResult, Callback) ->
 
 execute_sync_pooled(Plan, Seed, Workers, Platform, OnResult, Callback) ->
     Self = self(),
-    unitest@internal@runner:execute_pooled(
+    unitest:execute_pooled(
         Plan,
         Seed,
         Workers,

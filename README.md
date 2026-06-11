@@ -7,13 +7,13 @@ A Gleam test runner with random ordering, tagging, and CLI filtering. It is a dr
 
 ## Installation
 
-1.
+1. Swap gleeunit for unitest:
 
-```sh
-gleam remove gleeunit
-gleam add unitest --dev
-gleam clean
-```
+   ```sh
+   gleam remove gleeunit
+   gleam add unitest --dev
+   gleam clean
+   ```
 
 2. Open `test/project_test.gleam` and replace `import gleeunit` with `import unitest` and `gleeunit.main()` with `unitest.main()`.
 
@@ -41,7 +41,7 @@ Run with `gleam test`.
 - Test tagging for categorization and filtering
 - Runtime guards for conditional test execution (platform, version checks)
 - CLI filtering by file path, line number, test name, or tag
-- Parallel execution of module groups with configurable worker count
+- Parallel test execution with configurable worker count
 - Streaming dot (default) or table output format
 
 ## Why you may not want to use unitest
@@ -64,13 +64,37 @@ gleam test -- --reporter table --sort name    # Table sorted alphabetically
 gleam test -- --reporter table --sort time --sort-rev  # Table sorted fastest first
 gleam test -- test/my_mod_test.gleam          # All tests in file
 gleam test -- test/my_mod_test.gleam:42       # Test at line 42
-gleam test -- --test my_mod_test.fn           # Single test by name
+gleam test -- --test my_mod_test.add_test     # Single test by name
 gleam test -- --tag slow                      # Tests with tag
 gleam test -- test/foo_test.gleam --tag slow  # Combine file + tag
-gleam test -- --workers 4                     # Parallel with 4 module-group workers
+gleam test -- --workers 4                     # Parallel with 4 workers
+gleam test -- --timeout 30000                 # Per-test timeout in milliseconds (0 disables)
 ```
 
-The `test/` prefix can be omitted from file paths: `my_mod_test.gleam` will match `test/my_mod_test.gleam`.
+The `test/` prefix can be omitted from file paths: `my_mod_test.gleam` will match `test/my_mod_test.gleam`. Absolute paths and Windows-style separators (`C:\proj\test\my_mod_test.gleam:42`) also work.
+
+> [!NOTE]
+> **Timeouts on the JavaScript target.** A test that _synchronously_ hangs (an
+> infinite loop with no `await`) can only be interrupted in the parallel mode,
+> which runs tests in worker threads. The sequential and async modes run on
+> the main thread, where a synchronous hang blocks the event loop and the
+> timeout cannot fire.
+
+## Table Reporter by Default
+
+Make the table reporter the default so you don't need `--reporter table` on every run:
+
+```gleam
+import unitest
+
+pub fn main() {
+  unitest.defaults()
+  |> unitest.table_reporter
+  |> unitest.run
+}
+```
+
+The `--reporter` CLI flag still overrides this.
 
 ## Tagging Tests
 
@@ -92,13 +116,15 @@ pub fn integration_db_test() {
 
 ## Error Results (Opt-In)
 
-Tests can return `Result(a, e)` instead of `Nil`. When `check_results: True` is enabled, returning `Error(reason)` is treated as a test failure:
+Tests can return `Result(a, e)` instead of `Nil`. When enabled via `unitest.check_results(True)`, returning `Error(reason)` is treated as a test failure:
 
 ```gleam
-import unitest.{Options}
+import unitest
 
 pub fn main() {
-  unitest.run(Options(..unitest.default_options(), check_results: True))
+  unitest.defaults()
+  |> unitest.check_results(True)
+  |> unitest.run
 }
 
 pub fn validation_test() -> Result(Nil, String) {
@@ -146,14 +172,14 @@ Skipped tests show as `S` in the output.
 Skip certain tags unless explicitly requested:
 
 ```gleam
-import unitest.{Options}
+import unitest
 
 pub fn main() {
-  unitest.run(Options(..unitest.default_options(), ignored_tags: ["slow"]))
+  unitest.defaults()
+  |> unitest.ignored_tags(["slow"])
+  |> unitest.run
 }
 ```
 
 Tests tagged "slow" will show as `S` (skipped).
 Override with `gleam test -- --tag slow`.
-
-Further documentation at [hexdocs.pm/unitest](https://hexdocs.pm/unitest).

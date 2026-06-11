@@ -1,0 +1,8 @@
+---
+version: 2.0.0
+title: format_failure with undef
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_undef_test
+---
+1) m.t (< 1ms)
+   Undefined function: my_mod:missing/2

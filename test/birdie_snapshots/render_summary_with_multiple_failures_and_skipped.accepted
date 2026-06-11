@@ -1,0 +1,21 @@
+---
+version: 2.0.0
+title: render_summary with multiple failures and skipped
+file: ./test/unitest_test.gleam
+test_name: render_summary_multiple_failures_with_skipped_test
+---
+
+
+3 passed, 2 failures, 2 skipped
+Finished in 250ms
+Seed: 99
+
+
+Failures:
+1) foo.bad_test (5ms)
+   test/foo.gleam:12
+   boom
+
+2) bar.worse_test (1s)
+   test/bar.gleam:30
+   Test timed out after 1000ms

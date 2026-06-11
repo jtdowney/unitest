@@ -1,0 +1,8 @@
+---
+version: 2.0.0
+title: format_failure with color includes ansi codes
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_color_test
+---
+[31m1) m.t (< 1ms)[39m
+[31m   failed[39m

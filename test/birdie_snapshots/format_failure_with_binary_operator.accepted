@@ -1,0 +1,13 @@
+---
+version: 2.0.0
+title: format_failure with binary operator
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_with_binary_operator_test
+---
+1) mod.test (< 1ms)
+
+     assert x == 6
+
+   left:  5 (expression)
+   right: 6 (literal)
+   Assertion failed

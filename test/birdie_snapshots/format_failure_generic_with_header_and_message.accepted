@@ -1,0 +1,8 @@
+---
+version: 2.0.0
+title: format_failure generic with header and message
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_generic_test
+---
+1) my_module.my_test (42ms)
+   Assertion failed: expected True

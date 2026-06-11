@@ -1,0 +1,10 @@
+---
+version: 2.0.0
+title: format_failure with source snippet
+file: ./test/unitest/internal/test_failure_test.gleam
+test_name: format_failure_includes_source_snippet_test
+---
+1) mod.test (< 1ms)
+
+     assert x == 5
+   failed
