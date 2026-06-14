@@ -479,15 +479,11 @@ pub fn resolve_cli_action(args: List(String)) -> CliAction {
   case parse_cli_args(args) {
     Ok(cli_opts) -> RunWithCliOptions(cli_opts)
     Error(message) ->
-      case wants_help(args) {
+      case list.contains(args, "--help") || list.contains(args, "-h") {
         True -> ShowCliMessage(message, 0)
         False -> ShowCliMessage(message, 1)
       }
   }
-}
-
-fn wants_help(args: List(String)) -> Bool {
-  list.contains(args, "--help") || list.contains(args, "-h")
 }
 
 @internal
