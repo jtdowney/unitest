@@ -13,10 +13,6 @@ import { from_dynamic as decodeTestRunResult } from "./unitest/internal/outcome.
 // backstop) from racing that and terminating a worker that was about to report.
 const WORKER_WATCHDOG_GRACE_MS = 100;
 
-function formatError(err) {
-  return err == null ? String(err) : err.message || String(err);
-}
-
 function makeGenericError(message) {
   return decodeTestRunResult({ kind: "error", message });
 }
@@ -26,7 +22,7 @@ function crashedOutcome(error) {
     kind: "error",
     failureKind: {
       type: "crashed",
-      reason: formatError(error),
+      reason: error == null ? String(error) : error.message || String(error),
       stack: parseStack(error),
     },
   });
@@ -345,10 +341,6 @@ function startWithWorkerThreads(
     });
   }
 
-  function isAsyncTimeoutResult(result) {
-    return result?.failureKind?.type === "timeout";
-  }
-
   function recycleWorker(w) {
     w._done = true;
     w.terminate();
@@ -414,7 +406,7 @@ function startWithWorkerThreads(
             ),
           );
         }
-        if (isAsyncTimeoutResult(msg.result)) {
+        if (msg.result?.failureKind?.type === "timeout") {
           // Promise.race cannot cancel the losing test; it is still running
           // inside this worker. Recycle the worker so its side effects cannot
           // interfere with later tests. Deliberate, so it does not count
