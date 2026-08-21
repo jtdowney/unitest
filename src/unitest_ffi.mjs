@@ -30,27 +30,38 @@ function crashedOutcome(error) {
 
 // Main-thread timeout for the sequential, async, and promise-fallback paths.
 function withTimeout(promise, timeoutMs) {
-  if (!timeoutMs || timeoutMs <= 0)
+  if (!timeoutMs || timeoutMs <= 0) {
     return promise.then(
       (r) => ({ outcome: r }),
       (err) => ({ error: err }),
     );
+  }
+
   return new Promise((resolve) => {
     let settled = false;
     const timer = setTimeout(() => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
+
       settled = true;
       resolve({ timedOut: true });
     }, timeoutMs);
     promise.then(
       (r) => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
+
         settled = true;
         clearTimeout(timer);
         resolve({ outcome: r });
       },
       (err) => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
+
         settled = true;
         clearTimeout(timer);
         resolve({ error: err });
@@ -71,8 +82,12 @@ function settledToOutcome(result, timeoutMs) {
 }
 
 function detectRuntime() {
-  if (typeof Deno !== "undefined") return "deno";
-  if (typeof process !== "undefined") return "node";
+  if (typeof Deno !== "undefined") {
+    return "deno";
+  }
+  if (typeof process !== "undefined") {
+    return "node";
+  }
   return null;
 }
 
@@ -289,7 +304,9 @@ function startWithWorkerThreads(
   const limit = Math.max(1, workers | 0);
   const workerCount = Math.min(limit, queue.length);
 
-  if (workerCount === 0) return;
+  if (workerCount === 0) {
+    return;
+  }
 
   const workerUrl = new URL("./unitest_worker_ffi.mjs", import.meta.url);
 
@@ -325,6 +342,7 @@ function startWithWorkerThreads(
       w.terminate();
       return;
     }
+
     w._activeTest = test;
     w._timedOut = false;
     armWatchdog(w);
@@ -350,7 +368,10 @@ function startWithWorkerThreads(
   }
 
   function handleWorkerDeath(w, reason) {
-    if (w._dead || w._done) return;
+    if (w._dead || w._done) {
+      return;
+    }
+
     w._dead = true;
 
     clearWatchdog(w);
@@ -388,15 +409,15 @@ function startWithWorkerThreads(
   }
 
   function spawnWorker() {
-    const w = new Worker(workerUrl, { type: "module" });
+    const worker = new Worker(workerUrl, { type: "module" });
 
-    w.on("message", (msg) => {
+    worker.on("message", (msg) => {
       if (msg.type === "ready") {
-        sendNext(w);
+        sendNext(worker);
       } else if (msg.type === "result") {
-        clearWatchdog(w);
-        const test = w._activeTest;
-        w._activeTest = null;
+        clearWatchdog(worker);
+        const test = worker._activeTest;
+        worker._activeTest = null;
         if (test) {
           deliverPoolResult(
             testResult(
@@ -411,20 +432,26 @@ function startWithWorkerThreads(
           // inside this worker. Recycle the worker so its side effects cannot
           // interfere with later tests. Deliberate, so it does not count
           // toward the worker failure cap.
-          recycleWorker(w);
+          recycleWorker(worker);
         } else {
-          sendNext(w);
+          sendNext(worker);
         }
       }
     });
 
-    w.on("error", (err) => {
-      handleWorkerDeath(w, "Worker crashed: " + (err.message || String(err)));
+    worker.on("error", (err) => {
+      handleWorkerDeath(
+        worker,
+        "Worker crashed: " + (err.message || String(err)),
+      );
     });
 
-    w.on("exit", (code) => {
+    worker.on("exit", (code) => {
       if (code !== 0) {
-        handleWorkerDeath(w, "Worker exited unexpectedly with code " + code);
+        handleWorkerDeath(
+          worker,
+          "Worker exited unexpectedly with code " + code,
+        );
       }
     });
   }
