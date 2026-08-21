@@ -15,10 +15,13 @@ export default defineConfig([
         Deno: "readonly",
       },
     },
-    rules: {
-      "perfectionist/sort-imports": "error",
-    },
   },
   eslintConfigPrettier,
   globalIgnores(["build", "example/**/build"]),
+  {
+    rules: {
+      curly: "error",
+      "perfectionist/sort-imports": "error",
+    },
+  },
 ]);
