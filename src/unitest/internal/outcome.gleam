@@ -44,11 +44,8 @@ fn decode_test_failure() -> decode.Decoder(test_failure.TestFailure) {
   decode.success(test_failure.TestFailure(message:, file:, line:, kind:))
 }
 
-const default_asserted_expr = test_failure.AssertedExpr(
-  start: 0,
-  end: 0,
-  kind: test_failure.Unevaluated,
-)
+const default_asserted_expr =
+  test_failure.AssertedExpr(start: 0, end: 0, kind: test_failure.Unevaluated)
 
 fn decode_failure_kind() -> decode.Decoder(test_failure.FailureKind) {
   use tag <- decode.field("type", decode.string)
